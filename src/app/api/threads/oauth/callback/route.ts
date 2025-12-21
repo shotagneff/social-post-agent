@@ -51,7 +51,8 @@ export async function GET(req: Request) {
     const state = idx >= 0 ? stateParam.slice(0, idx) : stateParam;
     const workspaceId = idx >= 0 ? stateParam.slice(idx + 1) : "";
 
-    const cookieState = cookies().get("threads_oauth_state")?.value ?? "";
+    const cookieStore = await cookies();
+    const cookieState = cookieStore.get("threads_oauth_state")?.value ?? "";
     if (!cookieState || cookieState !== state) {
       return redirectToConnect({
         workspaceId: workspaceId || undefined,
