@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+export const dynamic = "force-dynamic";
+
 type Workspace = {
   id: string;
   name: string;
