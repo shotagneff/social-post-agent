@@ -5,10 +5,255 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  X
+  THREADS
+}
+
+enum DraftStatus {
+  COLLECTED
+  ANALYZED
+  DRAFTED
+  EDITING
+  READY_TO_APPROVE
+  APPROVED
+  SCHEDULED
+  POSTING
+  POSTED
+  FAILED
+}
+
+enum PostDraftStatus {
+  DRAFT_GENERATED
+  TEMP_SCHEDULED
+  CONFIRMED
+  POSTING
+  POSTED
+  SKIPPED
+  REJECTED
+  FAILED
+}
+
+enum ScheduleStatus {
+  waiting
+  posting
+  posted
+  failed
+}
+
+model Workspace {
+  id        String            @id @default(cuid())
+  name      String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  settings  WorkspaceSettings?
+  personas  Persona[]
+  genres    Genre[]
+  sources   SourceAccount[]
+  posts     CollectedPost[]
+  drafts    Draft[]
+  postDrafts PostDraft[]
+  schedulingSlots SchedulingSlot[]
+}
+
+model WorkspaceSettings {
+  id            String   @id @default(cuid())
+  workspaceId   String   @unique
+  timezone      String
+  postingTargets Json    @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  schedulingPolicy Json  @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  threadsAccessToken String?
+  threadsUserId      String?
+  threadsTokenExpiresAt DateTime?
+  fixedPersonaId String?
+  defaultGenreId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fixedPersona  Persona?  @relation("FixedPersona", fields: [fixedPersonaId], references: [id])
+  defaultGenre  Genre?    @relation("DefaultGenre", fields: [defaultGenreId], references: [id])
+}
+
+model Persona {
+  id          String   @id @default(cuid())
+  workspaceId String
+  version     Int
+  profile     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fixedFor    WorkspaceSettings[] @relation("FixedPersona")
+
+  @@unique([workspaceId, version])
+}
+
+model Genre {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  key         String
+  profile     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  defaultFor  WorkspaceSettings[] @relation("DefaultGenre")
+
+  @@unique([workspaceId, key])
+}
+
+model SourceAccount {
+  id          String   @id @default(cuid())
+  workspaceId String
+  platform    Platform
+  handle      String
+  displayName String?
+  isActive    Boolean  @default(true)
+  memo        String?
+  weight      Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  posts       CollectedPost[]
+
+  @@unique([workspaceId, platform, handle])
+}
+
+model CollectedPost {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  sourceAccountId String
+  platform        Platform
+  externalPostId  String?
+  url             String?
+  content         String
+  postedAt        DateTime?
+  metrics         Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  raw             Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  collectedAt     DateTime @default(now())
+
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceAccount   SourceAccount @relation(fields: [sourceAccountId], references: [id], onDelete: Cascade)
+  feature         PostFeature?
+
+  @@index([workspaceId, platform, collectedAt])
+}
+
+model PostFeature {
+  id              String   @id @default(cuid())
+  collectedPostId String   @unique
+  features        Json
+  analyzedAt      DateTime @default(now())
+
+  collectedPost   CollectedPost @relation(fields: [collectedPostId], references: [id], onDelete: Cascade)
+}
+
+model Draft {
+  id          String      @id @default(cuid())
+  workspaceId String
+  theme       String
+  status      DraftStatus @default(DRAFTED)
+  variants    Json        @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  formatted   Json        @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  approvals   ApprovalLog[]
+  schedules   Schedule[]
+  postDrafts  PostDraft[]
+}
+
+model PostDraft {
+  id          String         @id @default(cuid())
+  workspaceId String
+  draftId     String?
+  platform    Platform
+  body        String
+  status      PostDraftStatus @default(DRAFT_GENERATED)
+  tempScheduledAt DateTime?
+  confirmedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  draft       Draft?         @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  schedules   Schedule[]
+  slot        SchedulingSlot? @relation("SlotAssignment")
+
+  @@index([workspaceId, platform, createdAt])
+  @@index([status, createdAt])
+}
+
+model SchedulingSlot {
+  id          String   @id @default(cuid())
+  workspaceId String
+  platform    Platform
+  scheduledAt DateTime
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedPostDraftId String? @unique
+  assignedPostDraft   PostDraft? @relation("SlotAssignment", fields: [assignedPostDraftId], references: [id], onDelete: SetNull)
+  schedules   Schedule[] @relation("SlotSchedule")
+
+  @@unique([workspaceId, platform, scheduledAt])
+  @@index([workspaceId, platform, scheduledAt])
+}
+
+model ApprovalLog {
+  id         String   @id @default(cuid())
+  draftId    String
+  approvedBy String
+  note       String?
+  createdAt  DateTime @default(now())
+
+  draft      Draft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@index([draftId, createdAt])
+}
+
+model Schedule {
+  id           String         @id @default(cuid())
+  draftId      String?
+  postDraftId  String?
+  platform     Platform
+  scheduledAt  DateTime
+  status       ScheduleStatus @default(waiting)
+  isConfirmed  Boolean        @default(false)
+  slotId       String?
+  resultPostId String?
+  errorText    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  draft        Draft?         @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  postDraft    PostDraft?     @relation(fields: [postDraftId], references: [id], onDelete: Cascade)
+  slot         SchedulingSlot? @relation("SlotSchedule", fields: [slotId], references: [id], onDelete: SetNull)
+  published    PublishedPost?
+
+  @@index([status, scheduledAt])
+  @@index([isConfirmed, status, scheduledAt])
+}
+
+model PublishedPost {
+  id            String   @id @default(cuid())
+  scheduleId    String   @unique
+  platform      Platform
+  externalPostId String?
+  postedAt      DateTime @default(now())
+  raw           Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+
+  schedule      Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
 }

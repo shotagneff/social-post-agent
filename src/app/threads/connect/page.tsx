@@ -1,0 +1,295 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
+type WorkspaceItem = {
+  id: string;
+  name: string;
+  createdAt: string;
+  settings?: {
+    timezone: string;
+  } | null;
+};
+
+type ThreadsStatus = {
+  connected: boolean;
+  threads: {
+    userId: string | null;
+    tokenExpiresAt: string | null;
+    updatedAt: string;
+  };
+};
+
+function fmt(dt: string | null) {
+  if (!dt) return "-";
+  const d = new Date(dt);
+  if (Number.isNaN(d.getTime())) return dt;
+  return d.toLocaleString();
+}
+
+export default function ThreadsConnectPage() {
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(false);
+  const [workspacesError, setWorkspacesError] = useState<string>("");
+
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState<string>("");
+  const [status, setStatus] = useState<ThreadsStatus | null>(null);
+
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [result, setResult] = useState<string>("");
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const fromQuery = String(q.get("workspaceId") ?? "").trim();
+    const fromStorage = String(window.localStorage.getItem("lastWorkspaceId") ?? "").trim();
+    const initial = fromQuery || fromStorage;
+    if (initial) setWorkspaceId(initial);
+
+    const resultParam = String(q.get("result") ?? "").trim();
+    const messageParam = String(q.get("message") ?? "").trim();
+    if (resultParam || messageParam) {
+      setResult(messageParam || (resultParam === "ok" ? "完了しました。" : "失敗しました。"));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (workspaceId.trim()) {
+      window.localStorage.setItem("lastWorkspaceId", workspaceId.trim());
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    let canceled = false;
+    setWorkspacesLoading(true);
+    setWorkspacesError("");
+    fetch("/api/workspaces", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (canceled) return;
+        if (!json?.ok) {
+          setWorkspacesError(`エラー: ${json?.error ?? "不明なエラー"}`);
+          setWorkspaces([]);
+          return;
+        }
+        const list = Array.isArray(json.workspaces) ? (json.workspaces as WorkspaceItem[]) : [];
+        setWorkspaces(list);
+        if (!workspaceId.trim() && list.length === 1) {
+          setWorkspaceId(list[0].id);
+        }
+      })
+      .catch((e) => {
+        if (canceled) return;
+        const msg = e instanceof Error ? e.message : "不明なエラー";
+        setWorkspacesError(`エラー: ${msg}`);
+      })
+      .finally(() => {
+        if (canceled) return;
+        setWorkspacesLoading(false);
+      });
+
+    return () => {
+      canceled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceId.trim()) {
+      setStatus(null);
+      return;
+    }
+
+    let canceled = false;
+    setStatusLoading(true);
+    setStatusError("");
+    setStatus(null);
+
+    fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/threads`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (canceled) return;
+        if (!json?.ok) {
+          setStatusError(`エラー: ${json?.error ?? "不明なエラー"}`);
+          setStatus(null);
+          return;
+        }
+        setStatus(json as ThreadsStatus);
+      })
+      .catch((e) => {
+        if (canceled) return;
+        const msg = e instanceof Error ? e.message : "不明なエラー";
+        setStatusError(`エラー: ${msg}`);
+      })
+      .finally(() => {
+        if (canceled) return;
+        setStatusLoading(false);
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [workspaceId]);
+
+  const selectedWorkspace = useMemo(() => {
+    return workspaces.find((w) => w.id === workspaceId) ?? null;
+  }, [workspaces, workspaceId]);
+
+  const connectUrl = useMemo(() => {
+    if (!workspaceId.trim()) return "";
+    return `/api/threads/oauth/start?workspaceId=${encodeURIComponent(workspaceId)}`;
+  }, [workspaceId]);
+
+  async function disconnect() {
+    if (!workspaceId.trim()) return;
+    if (!confirm("Threads連携を解除します。よろしいですか？")) return;
+
+    setDisconnecting(true);
+    setResult("");
+    setStatusError("");
+
+    try {
+      const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/threads`, {
+        method: "DELETE",
+      });
+      const json = (await res.json().catch(() => null)) as any;
+      if (!json?.ok) {
+        setResult(`エラー: ${json?.error ?? "不明なエラー"}`);
+        return;
+      }
+      setResult("解除しました。");
+
+      const res2 = await fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/threads`, { cache: "no-store" });
+      const json2 = (await res2.json().catch(() => null)) as any;
+      if (json2?.ok) setStatus(json2 as ThreadsStatus);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "不明なエラー";
+      setResult(`エラー: ${msg}`);
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Threads 連携</h1>
+          <div className="mt-1 text-sm text-zinc-600">
+            ワークスペースごとにThreadsアカウントを連携します。連携すると、Threadsへの投稿を実行できます。
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Link className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-zinc-50" href="/postdrafts">
+            投稿案
+          </Link>
+          <Link className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-zinc-50" href="/setup">
+            セットアップ
+          </Link>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold">1. ワークスペースを選択</div>
+        <div className="mt-2 text-sm text-zinc-600">
+          連携したいワークスペースを選んでください。ワークスペースは /setup で作成できます。
+        </div>
+
+        <div className="mt-3">
+          <select
+            className="w-full rounded-lg border px-3 py-2"
+            value={workspaceId}
+            onChange={(e) => setWorkspaceId(e.target.value)}
+            disabled={workspacesLoading}
+          >
+            <option value="">選択してください</option>
+            {workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name} ({w.id.slice(0, 8)}...)
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {workspacesLoading ? <div className="mt-2 text-sm text-zinc-600">読み込み中…</div> : null}
+        {workspacesError ? <div className="mt-2 text-sm text-red-600">{workspacesError}</div> : null}
+      </div>
+
+      <div className="mt-4 rounded-2xl border bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold">2. 連携状態</div>
+
+        {!workspaceId.trim() ? (
+          <div className="mt-2 text-sm text-zinc-600">先にワークスペースを選択してください。</div>
+        ) : statusLoading ? (
+          <div className="mt-2 text-sm text-zinc-600">確認中…</div>
+        ) : statusError ? (
+          <div className="mt-2 text-sm text-red-600">{statusError}</div>
+        ) : status ? (
+          <div className="mt-3 space-y-2 text-sm">
+            <div>
+              <span className="font-semibold">ワークスペース:</span> {selectedWorkspace?.name ?? "-"}
+            </div>
+            <div>
+              <span className="font-semibold">状態:</span>{" "}
+              {status.connected ? (
+                <span className="rounded-full bg-green-600 px-2 py-0.5 text-[11px] font-semibold text-white">連携済み</span>
+              ) : (
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                  未連携
+                </span>
+              )}
+            </div>
+            <div>
+              <span className="font-semibold">Threads user_id:</span> {status.threads.userId ?? "-"}
+            </div>
+            <div>
+              <span className="font-semibold">有効期限:</span> {fmt(status.threads.tokenExpiresAt)}
+            </div>
+            <div>
+              <span className="font-semibold">更新:</span> {fmt(status.threads.updatedAt)}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 text-sm text-zinc-600">-</div>
+        )}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a
+            className={`rounded-lg px-4 py-2 text-sm font-semibold text-white ${
+              workspaceId.trim() ? "bg-black hover:bg-zinc-800" : "bg-zinc-300"
+            }`}
+            href={connectUrl}
+            onClick={(e) => {
+              if (!workspaceId.trim()) e.preventDefault();
+            }}
+          >
+            接続する
+          </a>
+
+          <button
+            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
+            onClick={disconnect}
+            disabled={!workspaceId.trim() || disconnecting}
+          >
+            {disconnecting ? "解除中…" : "解除"}
+          </button>
+        </div>
+
+        <div className="mt-3 text-sm text-zinc-600">
+          接続ボタンを押すとMetaの認可画面に移動します。認可後にこの画面へ戻り、連携状態が「連携済み」になります。
+        </div>
+
+        {result ? <div className="mt-3 text-sm">{result}</div> : null}
+      </div>
+
+      <div className="mt-4 rounded-2xl border bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold">補足</div>
+        <div className="mt-2 text-sm text-zinc-600">
+          投稿実行（cron）は「確定済み」の投稿のみを対象にします。投稿案の確定は /postdrafts から行ってください。
+        </div>
+      </div>
+    </div>
+  );
+}
