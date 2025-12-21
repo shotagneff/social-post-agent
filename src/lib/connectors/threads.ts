@@ -54,7 +54,7 @@ export async function publishToThreadsText(args: {
       return { ok: false, error: "text is empty", retryable: false };
     }
 
-    const createUrl = `https://graph.facebook.com/${version}/${encodeURIComponent(userId)}/threads`;
+    const createUrl = `https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads`;
     const created = await postForm(createUrl, {
       media_type: "TEXT",
       text: trimmed,
@@ -74,7 +74,7 @@ export async function publishToThreadsText(args: {
       return { ok: false, error: "Threads create returned no id", retryable: false, raw: created.json };
     }
 
-    const publishUrl = `https://graph.facebook.com/${version}/${encodeURIComponent(userId)}/threads_publish`;
+    const publishUrl = `https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads_publish`;
     const published = await postForm(publishUrl, {
       creation_id: creationId,
       access_token: accessToken,

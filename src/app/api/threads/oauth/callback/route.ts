@@ -70,12 +70,11 @@ export async function GET(req: Request) {
 
     const clientId = mustEnv("THREADS_OAUTH_CLIENT_ID");
     const clientSecret = mustEnv("THREADS_OAUTH_CLIENT_SECRET");
-    const version = (process.env.THREADS_API_VERSION ?? "v19.0").trim() || "v19.0";
 
     const redirectUri =
       process.env.THREADS_OAUTH_REDIRECT_URI?.trim() || new URL("/api/threads/oauth/callback", url.origin).toString();
 
-    const tokenUrl = new URL(`https://graph.facebook.com/${version}/oauth/access_token`);
+    const tokenUrl = new URL(`https://graph.threads.net/oauth/access_token`);
     tokenUrl.searchParams.set("client_id", clientId);
     tokenUrl.searchParams.set("client_secret", clientSecret);
     tokenUrl.searchParams.set("redirect_uri", redirectUri);
@@ -104,7 +103,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const meUrl = new URL(`https://graph.facebook.com/${version}/me`);
+    const meUrl = new URL(`https://graph.threads.net/me`);
     meUrl.searchParams.set("fields", "id");
     meUrl.searchParams.set("access_token", accessToken);
 
