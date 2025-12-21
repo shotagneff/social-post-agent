@@ -8,8 +8,9 @@ const prismaAny = prisma as any;
 
 function mustEnv(name: string) {
   const v = process.env[name];
-  if (!v) throw new Error(`${name} is missing`);
-  return v;
+  const trimmed = String(v ?? "").trim();
+  if (!trimmed) throw new Error(`${name} is missing`);
+  return trimmed;
 }
 
 async function fetchJson(url: string) {

@@ -5,8 +5,9 @@ export const runtime = "nodejs";
 
 function mustEnv(name: string) {
   const v = process.env[name];
-  if (!v) throw new Error(`${name} is missing`);
-  return v;
+  const trimmed = String(v ?? "").trim();
+  if (!trimmed) throw new Error(`${name} is missing`);
+  return trimmed;
 }
 
 export async function GET(req: Request) {
