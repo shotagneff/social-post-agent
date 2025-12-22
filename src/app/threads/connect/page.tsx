@@ -141,6 +141,24 @@ export default function ThreadsConnectPage() {
     return `/api/threads/oauth/start?workspaceId=${encodeURIComponent(workspaceId)}`;
   }, [workspaceId]);
 
+  const nextLinks = useMemo(() => {
+    const id = String(workspaceId ?? "").trim();
+    const q = id ? `?workspaceId=${encodeURIComponent(id)}` : "";
+    return {
+      draftsNew: `/drafts/new${q}`,
+      postDrafts: `/postdrafts${q}`,
+      schedules: `/schedules${q}`,
+    };
+  }, [workspaceId]);
+
+  const showNextSteps = useMemo(() => {
+    if (!workspaceId.trim()) return false;
+    if (status?.connected) return true;
+    const msg = String(result ?? "").trim();
+    if (!msg) return false;
+    return msg.includes("完了") || msg.includes("成功") || msg.includes("連携");
+  }, [result, status?.connected, workspaceId]);
+
   async function disconnect() {
     if (!workspaceId.trim()) return;
     if (!confirm("Threads連携を解除します。よろしいですか？")) return;
@@ -282,6 +300,27 @@ export default function ThreadsConnectPage() {
 
         {result ? <div className="mt-3 text-sm">{result}</div> : null}
       </div>
+
+      {showNextSteps ? (
+        <div className="mt-4 rounded-2xl border bg-white p-4 shadow-sm">
+          <div className="text-sm font-semibold">次にやること</div>
+          <div className="mt-2 text-sm text-zinc-600">
+            連携ができたら、まずは投稿案を作って仮予約→確定へ進むのがおすすめです。
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800" href={nextLinks.postDrafts}>
+              投稿案を作る（大量生成）
+            </Link>
+            <Link className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-50" href={nextLinks.draftsNew}>
+              下書きを作る（1件）
+            </Link>
+            <Link className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-50" href={nextLinks.schedules}>
+              予約を確認
+            </Link>
+          </div>
+          <div className="mt-2 text-xs text-zinc-600">※どの画面も同じ投稿先（workspaceId）で開きます。</div>
+        </div>
+      ) : null}
 
       <div className="mt-4 rounded-2xl border bg-white p-4 shadow-sm">
         <div className="text-sm font-semibold">補足</div>
