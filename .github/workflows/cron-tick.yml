@@ -20,10 +20,16 @@ jobs:
             exit 1
           fi
 
-          curl -sS -X POST \
+          http_code=$(curl -sS -X POST \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
-            "https://social-post-agent-eight.vercel.app/api/cron/tick" \
-            | tee response.json
+            -o response.json \
+            -w "%{http_code}" \
+            "https://social-post-agent-eight.vercel.app/api/cron/tick")
 
+          echo "HTTP $http_code"
           cat response.json
+
+          if [ "$http_code" != "200" ]; then
+            exit 1
+          fi
