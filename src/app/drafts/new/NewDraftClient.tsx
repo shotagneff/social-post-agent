@@ -129,6 +129,14 @@ export default function NewDraftClient() {
     }));
   }, [workspaces]);
 
+  const selectedWorkspaceLabel = useMemo(() => {
+    const id = String(workspaceId ?? "").trim();
+    if (!id) return "-";
+    const ws = workspaces.find((w) => w.id === id);
+    const name = ws?.name ? String(ws.name) : "-";
+    return `${name} (${id.slice(0, 8)}...)`;
+  }, [workspaces, workspaceId]);
+
   async function create() {
     setCreating(true);
     setResult("");
@@ -189,6 +197,13 @@ export default function NewDraftClient() {
         <Stepper steps={stepLabels} currentIndex={currentIndex} />
 
         <div className="rounded-lg border bg-white p-4 space-y-3">
+          {step !== "workspace" ? (
+            <div className="rounded border bg-zinc-50 p-3 text-xs text-zinc-700">
+              <div className="text-zinc-500">投稿先（選択中）</div>
+              <div className="mt-1 font-medium">{selectedWorkspaceLabel}</div>
+            </div>
+          ) : null}
+
           {step === "workspace" ? (
             <>
               <div className="text-sm font-medium">投稿先</div>
