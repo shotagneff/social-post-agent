@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type Platform = "X" | "THREADS";
@@ -105,7 +105,6 @@ function addDaysYmd(ymd: string, days: number) {
 
 export default function SetupPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [workspaceName, setWorkspaceName] = useState("マイ投稿先");
   const [timezone, setTimezone] = useState("Asia/Tokyo");
   const [postingTargets, setPostingTargets] = useState<Platform[]>(["X"]);
@@ -232,13 +231,28 @@ export default function SetupPage() {
   ];
 
   useEffect(() => {
-    const forced = String(searchParams.get("step") ?? "").trim();
-    if (!forced) return;
-    if (forced === "workspace" || forced === "persona" || forced === "genre" || forced === "sources" || forced === "confirm" || forced === "scheduling") {
-      setStep(forced);
+    function applyForcedStep() {
+      if (typeof window === "undefined") return;
+      const forced = String(new URLSearchParams(window.location.search).get("step") ?? "").trim();
+      if (!forced) return;
+      if (
+        forced === "workspace" ||
+        forced === "persona" ||
+        forced === "genre" ||
+        forced === "sources" ||
+        forced === "confirm" ||
+        forced === "scheduling"
+      ) {
+        setStep(forced);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+
+    applyForcedStep();
+    window.addEventListener("popstate", applyForcedStep);
+    return () => {
+      window.removeEventListener("popstate", applyForcedStep);
+    };
+  }, []);
 
   useEffect(() => {
     let canceled = false;
