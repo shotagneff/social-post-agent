@@ -301,8 +301,9 @@ export default function PostDraftsPage() {
     setWorking(true);
     setResult("");
 
-    const startedAt = new Date();
-    setRecentAfterIso(startedAt.toISOString());
+    const startedAt = Date.now();
+    const safetyMs = 5 * 60 * 1000;
+    setRecentAfterIso(new Date(startedAt - safetyMs).toISOString());
     setRecentOnly(true);
     try {
       const res1 = await fetch("/api/postdrafts/batch", {
@@ -384,6 +385,14 @@ export default function PostDraftsPage() {
       return Number.isFinite(t) && t >= afterMs;
     });
   }, [items, recentAfterIso, recentOnly]);
+
+  const recentFilterNotice = useMemo(() => {
+    if (!recentOnly) return "";
+    if (!recentAfterIso.trim()) return "";
+    if (items.length === 0) return "";
+    if (visibleItems.length > 0) return "";
+    return "「直近の実行分のみ表示」がONのため、一覧が0件になっています。表示を戻すにはチェックをOFFにしてください。";
+  }, [items.length, recentAfterIso, recentOnly, visibleItems.length]);
 
   const stepLabels = ["投稿枠を作る", "大量生成＆仮予約", "確認して確定", "投稿実行"];
   const currentStepIndex = confirmedCount > 0 ? 3 : tempCount > 0 ? 2 : 1;
@@ -535,6 +544,15 @@ export default function PostDraftsPage() {
               直近の実行分のみ表示
             </label>
           </div>
+
+          {recentFilterNotice ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <div>{recentFilterNotice}</div>
+              <button className="mt-2 rounded-lg border bg-white px-3 py-1.5 text-xs" onClick={() => setRecentOnly(false)}>
+                フィルタをOFFにする
+              </button>
+            </div>
+          ) : null}
 
           {listError ? <div className="rounded border bg-white p-3 text-sm">{listError}</div> : null}
 
