@@ -29,6 +29,24 @@ type TickResult = {
   errorText?: string;
 };
 
+function isThreadsTokenExpiredMessage(message: string) {
+  const m = String(message ?? "").toLowerCase();
+  return (
+    m.includes("session has expired") ||
+    m.includes("error validating access token") ||
+    m.includes("oauth") && m.includes("expired")
+  );
+}
+
+function formatThreadsAuthError(args: { message: string; workspaceId: string }) {
+  const workspaceId = String(args.workspaceId ?? "").trim();
+  const url = workspaceId
+    ? `/threads/connect?workspaceId=${encodeURIComponent(workspaceId)}`
+    : "/threads/connect";
+  const base = `Threadsトークンの有効期限切れです。再連携してください: ${url}`;
+  return `${base}\n\n詳細: ${String(args.message ?? "").trim()}`;
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -141,7 +159,11 @@ async function processOneSchedule(scheduleId: string) {
             } as const);
 
       if (!published.ok) {
-        const message = published.error;
+        const rawMessage = String(published.error ?? "");
+        const message =
+          platform === "THREADS" && isThreadsTokenExpiredMessage(rawMessage)
+            ? formatThreadsAuthError({ message: rawMessage, workspaceId })
+            : rawMessage;
         if (published.retryable) {
           await prismaAny.schedule.updateMany({
             where: { id: scheduleId, status: "posting" },

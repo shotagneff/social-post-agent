@@ -36,6 +36,16 @@ type Schedule = {
   } | null;
 };
 
+function isThreadsTokenExpiredErrorText(errorText: string) {
+  const m = String(errorText ?? "").toLowerCase();
+  return (
+    m.includes("session has expired") ||
+    m.includes("error validating access token") ||
+    m.includes("oauth") && m.includes("expired") ||
+    m.includes("threadsトークンの有効期限切れ")
+  );
+}
+
 export default function SchedulesPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -409,6 +419,12 @@ export default function SchedulesPage() {
             const rows = g.items.map((s) => {
               const effectiveConfirmed = Boolean(s.isConfirmed || s.draftId);
               const due = isDue(s);
+              const workspaceId = String(s.postDraft?.workspaceId ?? s.draft?.workspaceId ?? "").trim();
+              const threadsReconnectHref = workspaceId
+                ? `/threads/connect?workspaceId=${encodeURIComponent(workspaceId)}`
+                : "/threads/connect";
+              const showThreadsReconnect =
+                s.platform === "THREADS" && Boolean(s.errorText) && isThreadsTokenExpiredErrorText(String(s.errorText ?? ""));
               const canCancel =
                 s.status === "waiting" &&
                 !s.published &&
@@ -464,6 +480,16 @@ export default function SchedulesPage() {
                     <div className="col-span-12 mt-2">
                       <details className="rounded border bg-white p-2 text-xs text-red-700">
                         <summary className="cursor-pointer select-none">エラー内容を表示</summary>
+                        {showThreadsReconnect ? (
+                          <div className="mt-2">
+                            <Link
+                              className="inline-flex items-center rounded bg-black px-3 py-2 text-xs font-semibold text-white"
+                              href={threadsReconnectHref}
+                            >
+                              Threadsを再連携する
+                            </Link>
+                          </div>
+                        ) : null}
                         <div className="mt-2 whitespace-pre-wrap">{s.errorText}</div>
                       </details>
                     </div>
