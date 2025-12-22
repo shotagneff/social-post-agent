@@ -346,6 +346,16 @@ export default function PostDraftsPage() {
         ? "本文はAIで生成されました"
         : "本文はモックで生成されました（AI失敗時など）";
       const llmError = meta?.llmError ? String(meta.llmError) : "";
+      const sourcesUsed = Array.isArray(meta?.sourcesUsed) ? (meta.sourcesUsed as any[]) : [];
+      const sourcesUsedLabel = sourcesUsed
+        .map((x) => {
+          const h = String(x?.handle ?? "").trim();
+          const c = Number(x?.count ?? 0) || 0;
+          return h ? `${h}${c ? `(${c})` : ""}` : "";
+        })
+        .filter(Boolean)
+        .slice(0, 5)
+        .join(" / ");
       const diag = meta?.used
         ? [
             "設定チェック（投稿文の精度に影響）",
@@ -353,6 +363,7 @@ export default function PostDraftsPage() {
             `- ペルソナ: ${meta.used.persona ? "設定済み" : "未設定（/setup で設定）"}`,
             `- ジャンル: ${meta.used.genre ? "設定済み" : "未設定（/setup で設定）"}`,
             `- 参照アカウント: ${meta.used.sources ? `有効 ${sourcesActive}件` : "未設定（/setup の参照アカウントを追加）"}`,
+            ...(sourcesUsedLabel ? [`- 今回参照したアカウント: ${sourcesUsedLabel}`] : []),
             ...(llmError ? [`- AIエラー（参考）: ${llmError}`] : []),
           ].join("\n")
         : "";

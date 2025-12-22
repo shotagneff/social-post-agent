@@ -52,7 +52,7 @@ async function generatePostsWithOpenAI(args: {
     genre: args.genreProfile,
     sourceAccounts: args.sources,
     output: {
-      posts: "string[] (length must equal count)",
+      posts: "{text: string, sourcesUsed: {platform: 'X'|'THREADS', handle: string}[]}[] (length must equal count)",
     },
     rules: [
       "Return ONLY valid JSON.",
@@ -60,6 +60,9 @@ async function generatePostsWithOpenAI(args: {
       "Each post must be self-contained.",
       "Keep within maxLen characters; if close, prefer shorter.",
       "Avoid repeating the same hook across posts; vary angles.",
+      "For each post, choose 1-2 sourceAccounts and set sourcesUsed accordingly.",
+      "Do NOT copy phrases, unique catchphrases, or structure verbatim from sources; only use them as inspiration for tone/angles/structure.",
+      "Avoid mentioning the source account names in the post body.",
     ],
   };
 
@@ -97,11 +100,26 @@ async function generatePostsWithOpenAI(args: {
   }
 
   const parsed = JSON.parse(jsonText) as any;
-  const posts = Array.isArray(parsed?.posts) ? (parsed.posts as unknown[]) : [];
-  const out = posts.map((p) => String(p ?? "").trim()).filter(Boolean);
+  const posts = Array.isArray(parsed?.posts) ? (parsed.posts as any[]) : [];
+
+  const out = posts
+    .map((p) => {
+      const text = String(p?.text ?? "").trim();
+      const sourcesUsedRaw = Array.isArray(p?.sourcesUsed) ? p.sourcesUsed : [];
+      const sourcesUsed = sourcesUsedRaw
+        .map((s: any) => ({
+          platform: (s?.platform === "X" || s?.platform === "THREADS") ? (s.platform as Platform) : args.platform,
+          handle: String(s?.handle ?? "").trim(),
+        }))
+        .filter((s: any) => Boolean(s.handle));
+      return { text, sourcesUsed };
+    })
+    .filter((p) => Boolean(p.text));
+
   if (out.length !== args.count) {
     throw new Error(`OpenAI JSON invalid: posts.length=${out.length} (expected ${args.count})`);
   }
+
   return out;
 }
 
@@ -222,10 +240,11 @@ export async function POST(req: Request) {
     let generator: "openai" | "mock" = "mock";
     let llmError: string | null = null;
     let bodies: string[] | null = null;
+    let sourcesUsedSummary: Array<{ handle: string; count: number }> = [];
 
     if (useOpenAI) {
       try {
-        bodies = await generatePostsWithOpenAI({
+        const posts = await generatePostsWithOpenAI({
           theme,
           platform,
           count,
@@ -233,10 +252,26 @@ export async function POST(req: Request) {
           genreProfile: genre?.profile ?? {},
           sources: Array.isArray(sources) ? sources : [],
         });
+
+        bodies = posts.map((p) => p.text);
+        const counts = new Map<string, number>();
+        for (const p of posts) {
+          for (const s of p.sourcesUsed ?? []) {
+            const h = String(s?.handle ?? "").trim();
+            if (!h) continue;
+            counts.set(h, (counts.get(h) ?? 0) + 1);
+          }
+        }
+        sourcesUsedSummary = Array.from(counts.entries())
+          .map(([handle, c]) => ({ handle, count: c }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 5);
+
         generator = "openai";
       } catch (e) {
         llmError = e instanceof Error ? e.message : "Unknown error";
         bodies = null;
+        sourcesUsedSummary = [];
         generator = "mock";
       }
     }
@@ -249,6 +284,7 @@ export async function POST(req: Request) {
         genre: Boolean(genreId && genre),
         sources: Number(sourcesCount ?? 0) > 0,
       },
+      sourcesUsed: sourcesUsedSummary,
       ids: {
         personaId: personaId || null,
         genreId: genreId || null,
