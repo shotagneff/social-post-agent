@@ -341,12 +341,19 @@ export default function PostDraftsPage() {
 
       const meta = json1?.meta as any;
       const sourcesActive = Number(meta?.counts?.sourcesActive ?? 0) || 0;
+      const genLabel = meta?.generator === "openai" ? "OpenAI" : "モック";
+      const genNote = meta?.generator === "openai"
+        ? "本文はAIで生成されました"
+        : "本文はモックで生成されました（AI失敗時など）";
+      const llmError = meta?.llmError ? String(meta.llmError) : "";
       const diag = meta?.used
         ? [
             "設定チェック（投稿文の精度に影響）",
+            `- 本文生成: ${genLabel}（${genNote}）`,
             `- ペルソナ: ${meta.used.persona ? "設定済み" : "未設定（/setup で設定）"}`,
             `- ジャンル: ${meta.used.genre ? "設定済み" : "未設定（/setup で設定）"}`,
             `- 参照アカウント: ${meta.used.sources ? `有効 ${sourcesActive}件` : "未設定（/setup の参照アカウントを追加）"}`,
+            ...(llmError ? [`- AIエラー（参考）: ${llmError}`] : []),
           ].join("\n")
         : "";
 

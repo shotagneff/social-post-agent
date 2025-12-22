@@ -12,7 +12,98 @@ type Body = {
   platform?: Platform;
   count?: number;
   theme?: string;
+  useOpenAI?: boolean;
 };
+
+function extractJsonObject(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
+
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    return trimmed.slice(start, end + 1);
+  }
+
+  return "";
+}
+
+async function generatePostsWithOpenAI(args: {
+  theme: string;
+  platform: Platform;
+  count: number;
+  personaProfile: unknown;
+  genreProfile: unknown;
+  sources: Array<{ platform: Platform; handle: string; weight: number | null; memo: string | null }>;
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is missing");
+  }
+
+  const maxLen = args.platform === "X" ? 260 : 900;
+  const prompt = {
+    language: "ja",
+    platform: args.platform,
+    count: args.count,
+    maxLen,
+    theme: args.theme,
+    persona: args.personaProfile,
+    genre: args.genreProfile,
+    sourceAccounts: args.sources,
+    output: {
+      posts: "string[] (length must equal count)",
+    },
+    rules: [
+      "Return ONLY valid JSON.",
+      "Do not include markdown.",
+      "Each post must be self-contained.",
+      "Keep within maxLen characters; if close, prefer shorter.",
+      "Avoid repeating the same hook across posts; vary angles.",
+    ],
+  };
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0.8,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You generate Japanese social media post drafts. Output only valid JSON with the requested keys.",
+        },
+        { role: "user", content: JSON.stringify(prompt) },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`OpenAI error: ${res.status} ${text}`);
+  }
+
+  const json = (await res.json().catch(() => null)) as any;
+  const content = String(json?.choices?.[0]?.message?.content ?? "");
+  const jsonText = extractJsonObject(content);
+  if (!jsonText) {
+    throw new Error("OpenAI returned non-JSON content");
+  }
+
+  const parsed = JSON.parse(jsonText) as any;
+  const posts = Array.isArray(parsed?.posts) ? (parsed.posts as unknown[]) : [];
+  const out = posts.map((p) => String(p ?? "").trim()).filter(Boolean);
+  if (out.length !== args.count) {
+    throw new Error(`OpenAI JSON invalid: posts.length=${out.length} (expected ${args.count})`);
+  }
+  return out;
+}
 
 function pick<T>(arr: T[], idx: number) {
   return arr[idx % arr.length];
@@ -98,6 +189,7 @@ export async function POST(req: Request) {
     const platform = body.platform;
     const count = Math.max(1, Math.min(200, Number(body.count ?? 30) || 30));
     const theme = String(body.theme ?? "").trim() || "無題";
+    const useOpenAI = body.useOpenAI === undefined ? true : Boolean(body.useOpenAI);
 
     const [settings, sourcesCount] = await Promise.all([
       prismaAny.workspaceSettings.findUnique({
@@ -112,17 +204,46 @@ export async function POST(req: Request) {
     const personaId = String(settings?.fixedPersonaId ?? "").trim();
     const genreId = String(settings?.defaultGenreId ?? "").trim();
 
-    const [persona, genre] = await Promise.all([
+    const [persona, genre, sources] = await Promise.all([
       personaId
-        ? prismaAny.persona.findUnique({ where: { id: personaId }, select: { id: true } })
+        ? prismaAny.persona.findUnique({ where: { id: personaId }, select: { id: true, profile: true } })
         : Promise.resolve(null),
       genreId
-        ? prismaAny.genre.findUnique({ where: { id: genreId }, select: { id: true } })
+        ? prismaAny.genre.findUnique({ where: { id: genreId }, select: { id: true, profile: true } })
         : Promise.resolve(null),
+      prismaAny.sourceAccount.findMany({
+        where: { workspaceId, isActive: true },
+        orderBy: [{ weight: "desc" }, { createdAt: "asc" }],
+        take: 20,
+        select: { platform: true, handle: true, weight: true, memo: true },
+      }),
     ]);
 
+    let generator: "openai" | "mock" = "mock";
+    let llmError: string | null = null;
+    let bodies: string[] | null = null;
+
+    if (useOpenAI) {
+      try {
+        bodies = await generatePostsWithOpenAI({
+          theme,
+          platform,
+          count,
+          personaProfile: persona?.profile ?? {},
+          genreProfile: genre?.profile ?? {},
+          sources: Array.isArray(sources) ? sources : [],
+        });
+        generator = "openai";
+      } catch (e) {
+        llmError = e instanceof Error ? e.message : "Unknown error";
+        bodies = null;
+        generator = "mock";
+      }
+    }
+
     const meta = {
-      generator: "mock" as const,
+      generator,
+      llmError,
       used: {
         persona: Boolean(personaId && persona),
         genre: Boolean(genreId && genre),
@@ -136,13 +257,15 @@ export async function POST(req: Request) {
         sourcesActive: Number(sourcesCount ?? 0) || 0,
       },
       note:
-        "現在の /api/postdrafts/batch はモック生成です（本文には persona/genre/sources をまだ反映していません）。次ステップでLLM生成に置換します。",
+        generator === "openai"
+          ? "OpenAIで本文を生成しました（persona/genre/参照アカウントを入力に使用）。"
+          : "モックで本文を生成しました（OpenAI未使用/失敗時フォールバック）。",
     };
 
     const rows = Array.from({ length: count }).map((_, i) => ({
       workspaceId,
       platform: platform as any,
-      body: buildMockPost(theme, platform, i),
+      body: bodies?.[i] ? clampText(String(bodies[i]), platform === "X" ? 260 : 900) : buildMockPost(theme, platform, i),
       status: "DRAFT_GENERATED" as const,
     }));
 
