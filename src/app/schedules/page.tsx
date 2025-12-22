@@ -476,8 +476,11 @@ export default function SchedulesPage() {
                         <summary className="cursor-pointer select-none">エラー内容を表示</summary>
                         {showThreadsReconnect ? (
                           <div className="mt-2">
+                            <div className="mb-2 text-xs text-zinc-700">
+                              Threadsトークンの有効期限切れの可能性があります。投稿先を選んで再連携してください。
+                            </div>
                             <Link
-                              className="inline-flex items-center rounded bg-black px-3 py-2 text-xs font-semibold text-white"
+                              className="spa-button-primary"
                               href={threadsReconnectHref}
                             >
                               Threadsを再連携する
