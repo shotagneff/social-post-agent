@@ -25,6 +25,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "workspaceId is required" }, { status: 400 });
     }
 
+    const now = new Date();
+
     const limit = Math.max(1, Math.min(200, Number(body.limit ?? 50) || 50));
     const platform = body.platform;
     if (platform !== undefined && !isPlatform(platform)) {
@@ -58,6 +60,7 @@ export async function POST(req: Request) {
       where: {
         workspaceId,
         assignedPostDraftId: null,
+        scheduledAt: { gt: now },
         ...(platform ? { platform } : {}),
       },
       orderBy: { scheduledAt: "asc" },
