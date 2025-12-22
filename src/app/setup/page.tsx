@@ -964,5 +964,6 @@ export default function SetupPage() {
         ) : null}
 
         {result ? <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">{result}</div> : null}
+      </div>
   );
 }
