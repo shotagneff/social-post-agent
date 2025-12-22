@@ -39,7 +39,8 @@ export async function publishToThreadsText(args: {
   try {
     const accessToken = String(args.accessToken ?? "").trim();
     const userId = String(args.userId ?? "").trim();
-    const version = (process.env.THREADS_API_VERSION ?? "v19.0").trim() || "v19.0";
+    const rawVersion = String(process.env.THREADS_API_VERSION ?? "v1.0").trim();
+    const version = /^v\d+\.\d+$/.test(rawVersion) ? rawVersion : "v1.0";
 
     if (!accessToken) {
       return { ok: false, error: "Threadsアクセストークンがありません。", retryable: false };
