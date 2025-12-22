@@ -10,11 +10,13 @@ function requireCronSecret(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return;
 
-  const header = req.headers.get("x-cron-secret") ?? "";
+  const xCronSecret = req.headers.get("x-cron-secret") ?? "";
+  const authHeader = req.headers.get("authorization") ?? "";
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
   const url = new URL(req.url);
   const query = url.searchParams.get("secret") ?? "";
 
-  if (header !== secret && query !== secret) {
+  if (xCronSecret !== secret && bearer !== secret && query !== secret) {
     throw new Error("Unauthorized");
   }
 }
