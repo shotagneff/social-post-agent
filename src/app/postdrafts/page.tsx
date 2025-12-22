@@ -118,6 +118,9 @@ export default function PostDraftsPage() {
   const [working, setWorking] = useState(false);
   const [result, setResult] = useState<string>("");
 
+  const [recentOnly, setRecentOnly] = useState(false);
+  const [recentAfterIso, setRecentAfterIso] = useState<string>("");
+
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string>("");
   const [items, setItems] = useState<PostDraftItem[]>([]);
@@ -297,6 +300,10 @@ export default function PostDraftsPage() {
     if (!canRun) return;
     setWorking(true);
     setResult("");
+
+    const startedAt = new Date();
+    setRecentAfterIso(startedAt.toISOString());
+    setRecentOnly(true);
     try {
       const res1 = await fetch("/api/postdrafts/batch", {
         method: "POST",
@@ -365,6 +372,18 @@ export default function PostDraftsPage() {
     () => items.filter((x) => x.status === "CONFIRMED").length,
     [items],
   );
+
+  const visibleItems = useMemo(() => {
+    if (!recentOnly) return items;
+    const after = String(recentAfterIso ?? "").trim();
+    if (!after) return items;
+    const afterMs = new Date(after).getTime();
+    if (!Number.isFinite(afterMs)) return items;
+    return items.filter((it) => {
+      const t = new Date(it.createdAt).getTime();
+      return Number.isFinite(t) && t >= afterMs;
+    });
+  }, [items, recentAfterIso, recentOnly]);
 
   const stepLabels = ["投稿枠を作る", "大量生成＆仮予約", "確認して確定", "投稿実行"];
   const currentStepIndex = confirmedCount > 0 ? 3 : tempCount > 0 ? 2 : 1;
@@ -506,6 +525,15 @@ export default function PostDraftsPage() {
                 DRAFT_GENERATED: {generatedCount} 件 / TEMP_SCHEDULED: {tempCount} 件 / CONFIRMED: {confirmedCount} 件
               </div>
             </div>
+            <label className="flex items-center gap-2 text-xs text-zinc-700">
+              <input
+                type="checkbox"
+                checked={recentOnly}
+                onChange={(e) => setRecentOnly(e.target.checked)}
+                disabled={!recentAfterIso.trim()}
+              />
+              直近の実行分のみ表示
+            </label>
           </div>
 
           {listError ? <div className="rounded border bg-white p-3 text-sm">{listError}</div> : null}
@@ -524,14 +552,14 @@ export default function PostDraftsPage() {
                 </tr>
               </thead>
               <tbody>
-                {items.length === 0 ? (
+                {visibleItems.length === 0 ? (
                   <tr>
                     <td className="px-3 py-4 text-zinc-600" colSpan={7}>
                       まだありません。上の「大量生成して仮予約を作成」を押してください。
                     </td>
                   </tr>
                 ) : (
-                  items.map((it) => (
+                  visibleItems.map((it) => (
                     <tr key={it.id} className="border-t">
                       <td className="px-3 py-2 font-medium">{it.platform}</td>
                       <td className="px-3 py-2">{it.status}</td>
