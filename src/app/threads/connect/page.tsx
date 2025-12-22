@@ -41,12 +41,12 @@ export default function ThreadsConnectPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [result, setResult] = useState<string>("");
 
+  const [workspaceIdFromQuery, setWorkspaceIdFromQuery] = useState<string>("");
+
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const fromQuery = String(q.get("workspaceId") ?? "").trim();
-    const fromStorage = String(window.localStorage.getItem("lastWorkspaceId") ?? "").trim();
-    const initial = fromQuery || fromStorage;
-    if (initial) setWorkspaceId(initial);
+    if (fromQuery) setWorkspaceIdFromQuery(fromQuery);
 
     const resultParam = String(q.get("result") ?? "").trim();
     const messageParam = String(q.get("message") ?? "").trim();
@@ -76,9 +76,8 @@ export default function ThreadsConnectPage() {
         }
         const list = Array.isArray(json.workspaces) ? (json.workspaces as WorkspaceItem[]) : [];
         setWorkspaces(list);
-        if (!workspaceId.trim() && list.length === 1) {
-          setWorkspaceId(list[0].id);
-        }
+        const next = String(workspaceIdFromQuery || list[0]?.id || "").trim();
+        if (next) setWorkspaceId(next);
       })
       .catch((e) => {
         if (canceled) return;

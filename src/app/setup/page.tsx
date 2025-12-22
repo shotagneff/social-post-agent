@@ -247,8 +247,7 @@ export default function SetupPage() {
         const list = Array.isArray(json.workspaces) ? (json.workspaces as WorkspaceItem[]) : [];
         setWorkspaces(list);
 
-        const last = String(window.localStorage.getItem("lastWorkspaceId") ?? "").trim();
-        const initial = last || (list[0]?.id ?? "");
+        const initial = String(list[0]?.id ?? "").trim();
         if (initial) {
           setSelectedExistingWorkspaceId(initial);
           setUseExistingWorkspace(true);

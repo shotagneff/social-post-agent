@@ -111,6 +111,8 @@ export default function PostDraftsPage() {
   const [workspacesLoading, setWorkspacesLoading] = useState(false);
   const [workspacesError, setWorkspacesError] = useState<string>("");
 
+  const [workspaceIdFromQuery, setWorkspaceIdFromQuery] = useState<string>("");
+
   const [platform, setPlatform] = useState<Platform>("X");
   const [count, setCount] = useState<number>(30);
   const [theme, setTheme] = useState<string>("テーマ（仮）");
@@ -140,11 +142,7 @@ export default function PostDraftsPage() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const fromQuery = String(q.get("workspaceId") ?? "").trim();
-    const fromStorage = String(window.localStorage.getItem("lastWorkspaceId") ?? "").trim();
-    const initial = fromQuery || fromStorage;
-    if (initial) {
-      setWorkspaceId(initial);
-    }
+    if (fromQuery) setWorkspaceIdFromQuery(fromQuery);
   }, []);
 
   useEffect(() => {
@@ -175,9 +173,8 @@ export default function PostDraftsPage() {
         }
         const list = Array.isArray(json.workspaces) ? (json.workspaces as WorkspaceItem[]) : [];
         setWorkspaces(list);
-        if (!workspaceId.trim() && list.length === 1) {
-          setWorkspaceId(list[0].id);
-        }
+        const next = String(workspaceIdFromQuery || list[0]?.id || "").trim();
+        if (next) setWorkspaceId(next);
       })
       .catch((e) => {
         if (canceled) return;

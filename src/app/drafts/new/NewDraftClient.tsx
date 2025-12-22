@@ -64,13 +64,14 @@ function Stepper(props: { steps: string[]; currentIndex: number }) {
 
 export default function NewDraftClient() {
   const search = useSearchParams();
-  const [workspaceId, setWorkspaceId] = useState(search.get("workspaceId") ?? "");
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [workspaceIdFromQuery, setWorkspaceIdFromQuery] = useState<string>("");
   const [theme, setTheme] = useState("");
   const [useOpenAI, setUseOpenAI] = useState(false);
   const [result, setResult] = useState<string>("");
   const [creating, setCreating] = useState(false);
 
-  const [step, setStep] = useState<NewDraftStep>(workspaceId ? "theme" : "workspace");
+  const [step, setStep] = useState<NewDraftStep>("workspace");
   const [createdDraftId, setCreatedDraftId] = useState<string>("");
 
   const stepOrder: NewDraftStep[] = ["workspace", "theme", "options", "generate", "done"];
@@ -80,6 +81,12 @@ export default function NewDraftClient() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
   const [workspacesError, setWorkspacesError] = useState<string>("");
+
+  useEffect(() => {
+    const fromQuery = String(search.get("workspaceId") ?? "").trim();
+    if (fromQuery) setWorkspaceIdFromQuery(fromQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -95,6 +102,9 @@ export default function NewDraftClient() {
         }
         const list = (json.workspaces ?? []) as Workspace[];
         setWorkspaces(list);
+
+        const next = String(workspaceIdFromQuery || list[0]?.id || "").trim();
+        if (next) setWorkspaceId(next);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "不明なエラー";
         setWorkspacesError(msg);
@@ -103,7 +113,14 @@ export default function NewDraftClient() {
         setLoadingWorkspaces(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (workspaceId.trim() && step === "workspace") {
+      setStep("theme");
+    }
+  }, [step, workspaceId]);
 
   const workspaceOptions = useMemo(() => {
     return workspaces.map((w) => ({
