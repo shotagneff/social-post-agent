@@ -31,6 +31,10 @@ async function postForm(url: string, form: Record<string, string>) {
   return { res, text, json };
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function withAccessToken(url: string, accessToken: string) {
   const u = new URL(url);
   u.searchParams.set("access_token", accessToken);
@@ -76,6 +80,7 @@ export async function publishToThreadsText(args: {
     const created = await postForm(createUrl, {
       media_type: "TEXT",
       text: trimmed,
+      access_token: accessToken,
     });
 
     if (!created.res.ok) {
@@ -83,7 +88,12 @@ export async function publishToThreadsText(args: {
       const errMsg =
         (created.json?.error?.message as string | undefined) ??
         `${created.res.status} ${created.text || "Threads create failed"}`;
-      return { ok: false, error: `Threads create error: ${errMsg}`, retryable, raw: created.json ?? created.text };
+      return {
+        ok: false,
+        error: `Threads create error: (${created.res.status}) ${errMsg}`,
+        retryable,
+        raw: created.json ?? created.text,
+      };
     }
 
     const creationId = String(created.json?.id ?? "").trim();
@@ -95,10 +105,25 @@ export async function publishToThreadsText(args: {
       withAccessToken(`https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads_publish`, accessToken),
       { creation_id: creationId }
     );
-    const published = await postForm(publishUrl, {
+    let published = await postForm(publishUrl, {
       creation_id: creationId,
       access_token: accessToken,
     });
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (published.res.ok) break;
+
+      const msg = String(published.json?.error?.message ?? published.text ?? "").toLowerCase();
+      const isResourceMissing = msg.includes("requested resource does not exist") || msg.includes("resource does not exist");
+      if (!isResourceMissing) break;
+
+      // Sometimes the creation_id is not immediately publishable; retry briefly.
+      await sleep(800 * attempt);
+      published = await postForm(publishUrl, {
+        creation_id: creationId,
+        access_token: accessToken,
+      });
+    }
 
     if (!published.res.ok) {
       const retryable = published.res.status >= 500;
@@ -107,7 +132,7 @@ export async function publishToThreadsText(args: {
         `${published.res.status} ${published.text || "Threads publish failed"}`;
       return {
         ok: false,
-        error: `Threads publish error: ${errMsg}`,
+        error: `Threads publish error: (${published.res.status}) ${errMsg}`,
         retryable,
         raw: {
           mode: "threads",
