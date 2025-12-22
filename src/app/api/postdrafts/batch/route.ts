@@ -231,7 +231,7 @@ export async function POST(req: Request) {
         select: { fixedPersonaId: true, defaultGenreId: true },
       }),
       prismaAny.sourceAccount.count({
-        where: { workspaceId, isActive: true },
+        where: { workspaceId, isActive: true, platform },
       }),
     ]);
 
@@ -246,7 +246,7 @@ export async function POST(req: Request) {
         ? prismaAny.genre.findUnique({ where: { id: genreId }, select: { id: true, profile: true } })
         : Promise.resolve(null),
       prismaAny.sourceAccount.findMany({
-        where: { workspaceId, isActive: true },
+        where: { workspaceId, isActive: true, platform },
         orderBy: [{ weight: "desc" }, { createdAt: "asc" }],
         take: 20,
         select: { platform: true, handle: true, weight: true, memo: true },
