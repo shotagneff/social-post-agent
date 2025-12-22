@@ -743,7 +743,6 @@ export default function SetupPage() {
                 onClick={() => {
                   setUseExistingWorkspace(false);
                   setStep("workspace");
-                  setAutoAdvanced(true);
                 }}
               >
                 新しい投稿先を作る
