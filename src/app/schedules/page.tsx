@@ -169,7 +169,7 @@ export default function SchedulesPage() {
           {cronSecretConfigured ? (
             <div className="mt-1 text-xs text-zinc-600">
               本番運用では手動実行ボタンは使いません。VercelのCron Jobsで 5分おき（*/5 * * * *）に
-              /api/cron/tick?secret=...&amp;limit=20 を実行してください。
+              /api/cron/tick を実行してください（CRON_SECRET を設定すると、Vercelが Authorization: Bearer ... を自動で付けて呼び出します）。
             </div>
           ) : null}
           {cronSecretConfigured === null ? (
