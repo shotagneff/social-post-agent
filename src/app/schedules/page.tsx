@@ -41,6 +41,12 @@ export default function SchedulesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
+  const [cronSecretConfigured, setCronSecretConfigured] = useState<boolean | null>(null);
+
+  const cronModeText = cronSecretConfigured
+    ? "運用モード: Cronで自動処理（5分おき）"
+    : "運用モード: 手動実行（開発/ローカル向け）";
+
   const [ticking, setTicking] = useState(false);
   const [tickResult, setTickResult] = useState<string>("");
 
@@ -63,7 +69,22 @@ export default function SchedulesPage() {
     setLoading(false);
   }
 
+  async function loadCronStatus() {
+    try {
+      const res = await fetch("/api/cron/status", { cache: "no-store" });
+      const json = (await res.json().catch(() => null)) as any;
+      if (!json?.ok) {
+        setCronSecretConfigured(null);
+        return;
+      }
+      setCronSecretConfigured(Boolean(json.cronSecretConfigured));
+    } catch {
+      setCronSecretConfigured(null);
+    }
+  }
+
   useEffect(() => {
+    loadCronStatus();
     load();
   }, []);
 
@@ -81,7 +102,14 @@ export default function SchedulesPage() {
       const res = await fetch("/api/cron/tick?limit=20");
       const json = (await res.json().catch(() => null)) as any;
       if (!json?.ok) {
-        setTickResult(`エラー: ${json?.error ?? "不明なエラー"}`);
+        const rawError = String(json?.error ?? "不明なエラー");
+        if (rawError === "Unauthorized" || res.status === 401) {
+          setTickResult(
+            "エラー: この環境ではCRON_SECRETが設定されているため、手動実行は無効です。VercelのCron Jobsから /api/cron/tick?secret=... を定期実行してください。",
+          );
+          return;
+        }
+        setTickResult(`エラー: ${rawError}`);
         return;
       }
 
@@ -137,18 +165,39 @@ export default function SchedulesPage() {
         </div>
 
         <div className="rounded-lg border bg-white p-4 text-sm">
+          <div className="font-medium">{cronModeText}</div>
+          {cronSecretConfigured ? (
+            <div className="mt-1 text-xs text-zinc-600">
+              本番運用では手動実行ボタンは使いません。VercelのCron Jobsで 5分おき（*/5 * * * *）に
+              /api/cron/tick?secret=...&amp;limit=20 を実行してください。
+            </div>
+          ) : null}
+          {cronSecretConfigured === null ? (
+            <div className="mt-1 text-xs text-zinc-600">
+              Cron設定の状態を取得できませんでした（/api/cron/status）。
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border bg-white p-4 text-sm">
           <div className="font-medium">いまのステップ: 予約を処理する</div>
           <div className="mt-1 text-xs text-zinc-600">処理対象（waiting かつ 予約日時が過去）: {dueCount} 件</div>
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
-            disabled={ticking || dueCount === 0}
-            onClick={runTick}
-          >
-            {ticking ? "実行中..." : "予約を処理"}
-          </button>
+          {!cronSecretConfigured ? (
+            <button
+              className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+              disabled={ticking || dueCount === 0}
+              onClick={runTick}
+            >
+              {ticking ? "実行中..." : "予約を処理"}
+            </button>
+          ) : (
+            <button className="rounded bg-black px-4 py-2 text-sm text-white opacity-40" disabled>
+              Cronで自動処理（手動無効）
+            </button>
+          )}
           {tickResult ? <div className="text-sm">{tickResult}</div> : null}
           {cancelResult ? <div className="text-sm">{cancelResult}</div> : null}
           <button className="rounded border px-3 py-2 text-sm" disabled={loading} onClick={load}>
