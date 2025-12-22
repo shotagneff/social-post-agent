@@ -613,6 +613,12 @@ export default function PostDraftsPage() {
             </button>
           </div>
           {!canRun ? <div className="text-xs text-red-700">投稿先を選択してください。</div> : null}
+
+          {result ? (
+            <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm whitespace-pre-wrap">
+              {result}
+            </div>
+          ) : null}
       </div>
 
       <div className="spa-card p-6 space-y-4">
