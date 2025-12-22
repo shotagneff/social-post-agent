@@ -158,7 +158,7 @@ export default function SetupPage() {
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
-      .map((line) => {
+      .flatMap((line) => {
         const [platformRaw, handleRaw, weightRaw, ...memoParts] = line.split(",");
         const platform = (platformRaw ?? "").trim().toUpperCase();
         const handle = (handleRaw ?? "").trim();
@@ -166,11 +166,10 @@ export default function SetupPage() {
         const weight = Number.isFinite(weightNum) ? weightNum : undefined;
         const memo = memoParts.join(",").trim() || undefined;
         if ((platform === "X" || platform === "THREADS") && handle) {
-          return { platform: platform as Platform, handle, weight, memo };
+          return [{ platform: platform as Platform, handle, weight, memo }];
         }
-        return null;
-      })
-      .filter((v): v is SourceAccount => v !== null);
+        return [];
+      });
   }, [sourceAccountsText]);
 
   const [submitting, setSubmitting] = useState(false);
