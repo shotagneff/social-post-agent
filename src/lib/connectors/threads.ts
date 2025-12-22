@@ -37,6 +37,14 @@ function withAccessToken(url: string, accessToken: string) {
   return u.toString();
 }
 
+function withQueryParams(url: string, params: Record<string, string>) {
+  const u = new URL(url);
+  for (const [k, v] of Object.entries(params)) {
+    u.searchParams.set(k, v);
+  }
+  return u.toString();
+}
+
 export async function publishToThreadsText(args: {
   text: string;
   accessToken: string;
@@ -83,13 +91,11 @@ export async function publishToThreadsText(args: {
       return { ok: false, error: "Threads create returned no id", retryable: false, raw: created.json };
     }
 
-    const publishUrl = withAccessToken(
-      `https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads_publish`,
-      accessToken
+    const publishUrl = withQueryParams(
+      withAccessToken(`https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads_publish`, accessToken),
+      { creation_id: creationId }
     );
-    const published = await postForm(publishUrl, {
-      creation_id: creationId,
-    });
+    const published = await postForm(publishUrl, {});
 
     if (!published.res.ok) {
       const retryable = published.res.status >= 500;
@@ -100,7 +106,16 @@ export async function publishToThreadsText(args: {
         ok: false,
         error: `Threads publish error: ${errMsg}`,
         retryable,
-        raw: { creationId, publish: published.json ?? published.text },
+        raw: {
+          mode: "threads",
+          step: "publish",
+          version,
+          userId,
+          creationId,
+          http: { status: published.res.status, ok: published.res.ok },
+          publish: published.json ?? published.text,
+          note: "access_token is not included in this payload",
+        },
       };
     }
 
