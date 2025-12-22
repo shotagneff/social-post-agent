@@ -369,9 +369,10 @@ export default function PostDraftsPage() {
             `- ペルソナ: ${meta.used.persona ? "設定済み" : "未設定（/setup で設定）"}`,
             `- ジャンル: ${meta.used.genre ? "設定済み" : "未設定（/setup で設定）"}`,
             `- 参照アカウント: ${meta.used.sources ? `有効 ${sourcesActive}件` : "未設定（/setup の参照アカウントを追加）"}`,
-            ...(sourcesUsedLabel ? [`- 今回参照したアカウント: ${sourcesUsedLabel}`] : []),
+            ...(sourcesUsedLabel ? [`- 自動選択された参考アカウント: ${sourcesUsedLabel}`] : []),
             ...(styleAppliedLabel ? [`- 書き分けの狙い（参考）: ${styleAppliedLabel}`] : []),
             ...(llmError ? [`- AIエラー（参考）: ${llmError}`] : []),
+            "（入力は不要）参照アカウントは /setup の『参照アカウント』で登録します。memo 例:『結論→理由→一言』『箇条書き多め』『短文テンポ』『問いかけで締める』",
           ].join("\n")
         : "";
 
