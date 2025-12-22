@@ -149,28 +149,22 @@ export default function SetupPage() {
     ),
   );
 
-  const [sourceAccountsText, setSourceAccountsText] = useState(
-    "X,@example1,3,結論→理由→一言で締める\nX,@example2,1,箇条書き多めで短文テンポ\nTHREADS,@example3,2,問いかけで締める",
-  );
+  const [sourceAccountRows, setSourceAccountRows] = useState<SourceAccount[]>([
+    { platform: "X", handle: "@example1", weight: 3, memo: "結論→理由→一言で締める" },
+    { platform: "X", handle: "@example2", weight: 1, memo: "箇条書き多めで短文テンポ" },
+    { platform: "THREADS", handle: "@example3", weight: 2, memo: "問いかけで締める" },
+  ]);
 
   const sourceAccounts = useMemo<SourceAccount[]>(() => {
-    return sourceAccountsText
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .flatMap((line) => {
-        const [platformRaw, handleRaw, weightRaw, ...memoParts] = line.split(",");
-        const platform = (platformRaw ?? "").trim().toUpperCase();
-        const handle = (handleRaw ?? "").trim();
-        const weightNum = Number(String(weightRaw ?? "").trim());
-        const weight = Number.isFinite(weightNum) ? weightNum : undefined;
-        const memo = memoParts.join(",").trim() || undefined;
-        if ((platform === "X" || platform === "THREADS") && handle) {
-          return [{ platform: platform as Platform, handle, weight, memo }];
-        }
-        return [];
-      });
-  }, [sourceAccountsText]);
+    return (Array.isArray(sourceAccountRows) ? sourceAccountRows : [])
+      .map((r) => ({
+        platform: r.platform,
+        handle: String(r.handle ?? "").trim(),
+        weight: typeof r.weight === "number" && Number.isFinite(r.weight) ? r.weight : undefined,
+        memo: r.memo ? String(r.memo).trim() : undefined,
+      }))
+      .filter((r) => (r.platform === "X" || r.platform === "THREADS") && r.handle);
+  }, [sourceAccountRows]);
 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<string>("");
@@ -692,13 +686,89 @@ export default function SetupPage() {
               <div className="text-zinc-600">例: 『結論→理由→一言』『箇条書き多め』『短文テンポ』『問いかけで締める』</div>
               <div className="text-zinc-600">weight は優先度（大きいほど参照されやすい）です。空でもOK。</div>
             </div>
-            <textarea
-              className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-              rows={6}
-              value={sourceAccountsText}
-              onChange={(e) => setSourceAccountsText(e.target.value)}
-            />
-            <div className="text-xs text-zinc-600">解析結果: {sourceAccounts.length} 件</div>
+            <div className="space-y-2">
+              <div className="grid grid-cols-12 gap-2 text-xs text-zinc-600">
+                <div className="col-span-2">PLATFORM</div>
+                <div className="col-span-3">handle</div>
+                <div className="col-span-2">weight</div>
+                <div className="col-span-4">memo</div>
+                <div className="col-span-1"></div>
+              </div>
+              {sourceAccountRows.map((row, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2">
+                  <select
+                    className="col-span-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                    value={row.platform}
+                    onChange={(e) => {
+                      const v = e.target.value as Platform;
+                      setSourceAccountRows((prev) =>
+                        prev.map((p, i) => (i === idx ? { ...p, platform: v } : p)),
+                      );
+                    }}
+                  >
+                    <option value="X">X</option>
+                    <option value="THREADS">THREADS</option>
+                  </select>
+                  <input
+                    className="col-span-3 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                    value={row.handle}
+                    placeholder="@handle"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSourceAccountRows((prev) =>
+                        prev.map((p, i) => (i === idx ? { ...p, handle: v } : p)),
+                      );
+                    }}
+                  />
+                  <input
+                    className="col-span-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                    type="number"
+                    value={row.weight ?? ""}
+                    placeholder="(任意)"
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const num = raw === "" ? undefined : Number(raw);
+                      const v = Number.isFinite(num as number) ? (num as number) : undefined;
+                      setSourceAccountRows((prev) =>
+                        prev.map((p, i) => (i === idx ? { ...p, weight: v } : p)),
+                      );
+                    }}
+                  />
+                  <input
+                    className="col-span-4 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                    value={row.memo ?? ""}
+                    placeholder="例: 結論→理由→一言 / 箇条書き / 短文テンポ"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSourceAccountRows((prev) =>
+                        prev.map((p, i) => (i === idx ? { ...p, memo: v } : p)),
+                      );
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="col-span-1 spa-button-secondary"
+                    onClick={() => {
+                      setSourceAccountRows((prev) => prev.filter((_, i) => i !== idx));
+                    }}
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-zinc-600">解析結果: {sourceAccounts.length} 件</div>
+                <button
+                  type="button"
+                  className="spa-button-secondary"
+                  onClick={() => {
+                    setSourceAccountRows((prev) => [...prev, { platform: "X", handle: "", weight: undefined, memo: "" }]);
+                  }}
+                >
+                  追加
+                </button>
+              </div>
+            </div>
             {sourceAccounts.length === 0 ? (
               <div className="text-xs text-red-700">最低1件は入力してください。</div>
             ) : null}
