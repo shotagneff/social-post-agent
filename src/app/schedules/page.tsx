@@ -41,6 +41,9 @@ export default function SchedulesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
+  const [lastLoadedAtIso, setLastLoadedAtIso] = useState<string>("");
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
   const [statusFilter, setStatusFilter] = useState<"due" | "active" | "all">("active");
 
   const [cronSecretConfigured, setCronSecretConfigured] = useState<boolean | null>(null);
@@ -71,6 +74,7 @@ export default function SchedulesPage() {
     }
 
     setSchedules((json.schedules ?? []) as Schedule[]);
+    setLastLoadedAtIso(new Date().toISOString());
     setLoading(false);
   }
 
@@ -93,6 +97,17 @@ export default function SchedulesPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = window.setInterval(() => {
+      void load();
+    }, 10_000);
+    return () => {
+      window.clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRefresh]);
+
   function isDue(s: Schedule) {
     if (s.status !== "waiting") return false;
     const effectiveConfirmed = Boolean(s.isConfirmed || s.draftId);
@@ -110,6 +125,9 @@ export default function SchedulesPage() {
   }
 
   const dueCount = schedules.filter((s) => isDue(s)).length;
+  const waitingCount = schedules.filter((s) => s.status === "waiting").length;
+  const postingCount = schedules.filter((s) => s.status === "posting").length;
+  const postedCount = schedules.filter((s) => s.status === "posted").length;
 
   const visibleSchedules = useMemo(() => {
     return schedules.filter((s) => {
@@ -150,6 +168,13 @@ export default function SchedulesPage() {
   }, [visibleSchedules]);
 
   const failedCount = schedules.filter((s) => s.status === "failed").length;
+
+  const lastLoadedText = useMemo(() => {
+    if (!lastLoadedAtIso) return "-";
+    const t = new Date(lastLoadedAtIso);
+    if (Number.isNaN(t.getTime())) return "-";
+    return t.toLocaleString();
+  }, [lastLoadedAtIso]);
 
   async function runTick() {
     setTicking(true);
@@ -264,6 +289,44 @@ export default function SchedulesPage() {
         <div className="rounded-lg border bg-white p-4 text-sm">
           <div className="font-medium">いまのステップ: 予約を処理する</div>
           <div className="mt-1 text-xs text-zinc-600">処理対象（waiting かつ 予約日時が過去）: {dueCount} 件</div>
+        </div>
+
+        <div className="rounded-lg border bg-white p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm font-medium">いまの状態（サマリー）</div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600">
+              <div>
+                最終更新: <span className="font-medium text-zinc-800">{lastLoadedText}</span>
+              </div>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+                自動更新（10秒）
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
+            <div className={`rounded-lg border p-3 ${dueCount > 0 ? "border-amber-300 bg-amber-50" : "bg-white"}`}>
+              <div className="text-xs text-zinc-600">due</div>
+              <div className={`mt-1 text-2xl font-semibold ${dueCount > 0 ? "text-amber-900" : "text-zinc-900"}`}>{dueCount}</div>
+            </div>
+            <div className="rounded-lg border bg-white p-3">
+              <div className="text-xs text-zinc-600">waiting</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-900">{waitingCount}</div>
+            </div>
+            <div className={`rounded-lg border p-3 ${postingCount > 0 ? "border-zinc-300 bg-zinc-50" : "bg-white"}`}>
+              <div className="text-xs text-zinc-600">posting</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-900">{postingCount}</div>
+            </div>
+            <div className={`rounded-lg border p-3 ${failedCount > 0 ? "border-red-300 bg-red-50" : "bg-white"}`}>
+              <div className="text-xs text-zinc-600">failed</div>
+              <div className={`mt-1 text-2xl font-semibold ${failedCount > 0 ? "text-red-700" : "text-zinc-900"}`}>{failedCount}</div>
+            </div>
+            <div className="rounded-lg border bg-white p-3">
+              <div className="text-xs text-zinc-600">posted</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-900">{postedCount}</div>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
