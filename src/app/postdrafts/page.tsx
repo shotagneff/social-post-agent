@@ -356,6 +356,12 @@ export default function PostDraftsPage() {
         .filter(Boolean)
         .slice(0, 5)
         .join(" / ");
+      const styleApplied = Array.isArray(meta?.styleApplied) ? (meta.styleApplied as any[]) : [];
+      const styleAppliedLabel = styleApplied
+        .map((x) => String(x ?? "").trim())
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(" / ");
       const diag = meta?.used
         ? [
             "設定チェック（投稿文の精度に影響）",
@@ -364,6 +370,7 @@ export default function PostDraftsPage() {
             `- ジャンル: ${meta.used.genre ? "設定済み" : "未設定（/setup で設定）"}`,
             `- 参照アカウント: ${meta.used.sources ? `有効 ${sourcesActive}件` : "未設定（/setup の参照アカウントを追加）"}`,
             ...(sourcesUsedLabel ? [`- 今回参照したアカウント: ${sourcesUsedLabel}`] : []),
+            ...(styleAppliedLabel ? [`- 書き分けの狙い（参考）: ${styleAppliedLabel}`] : []),
             ...(llmError ? [`- AIエラー（参考）: ${llmError}`] : []),
           ].join("\n")
         : "";

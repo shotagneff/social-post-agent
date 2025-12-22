@@ -42,6 +42,16 @@ async function generatePostsWithOpenAI(args: {
   }
 
   const maxLen = args.platform === "X" ? 260 : 900;
+  const sourceAccountsForPrompt = (Array.isArray(args.sources) ? args.sources : [])
+    .filter((s) => String(s?.handle ?? "").trim())
+    .map((s) => ({
+      platform: s.platform,
+      handle: String(s.handle).trim(),
+      weight: typeof s.weight === "number" ? s.weight : null,
+      memo: s.memo ? String(s.memo) : "",
+    }))
+    .sort((a, b) => (Number(b.weight ?? 0) || 0) - (Number(a.weight ?? 0) || 0))
+    .slice(0, 20);
   const prompt = {
     language: "ja",
     platform: args.platform,
@@ -50,9 +60,10 @@ async function generatePostsWithOpenAI(args: {
     theme: args.theme,
     persona: args.personaProfile,
     genre: args.genreProfile,
-    sourceAccounts: args.sources,
+    sourceAccounts: sourceAccountsForPrompt,
     output: {
-      posts: "{text: string, sourcesUsed: {platform: 'X'|'THREADS', handle: string}[]}[] (length must equal count)",
+      posts:
+        "{text: string, sourcesUsed: {platform: 'X'|'THREADS', handle: string}[], styleApplied?: string}[] (length must equal count)",
     },
     rules: [
       "Return ONLY valid JSON.",
@@ -61,8 +72,12 @@ async function generatePostsWithOpenAI(args: {
       "Keep within maxLen characters; if close, prefer shorter.",
       "Avoid repeating the same hook across posts; vary angles.",
       "For each post, choose 1-2 sourceAccounts and set sourcesUsed accordingly.",
+      "When selecting sourcesUsed, prefer higher weight accounts, but diversify across posts.",
+      "You MUST apply the selected sources' memo as concrete writing directives (tone, structure, hook style, emoji usage, length preference, bullet usage, etc.).",
+      "If a selected source has an empty memo, infer a generic but distinct style (e.g., '結論→理由→一言', '箇条書き中心', '短文テンポ').",
       "Do NOT copy phrases, unique catchphrases, or structure verbatim from sources; only use them as inspiration for tone/angles/structure.",
       "Avoid mentioning the source account names in the post body.",
+      "Optionally set styleApplied to a short Japanese note describing what style you applied (for debugging), without revealing the account name.",
     ],
   };
 
@@ -112,7 +127,8 @@ async function generatePostsWithOpenAI(args: {
           handle: String(s?.handle ?? "").trim(),
         }))
         .filter((s: any) => Boolean(s.handle));
-      return { text, sourcesUsed };
+      const styleApplied = String(p?.styleApplied ?? "").trim();
+      return { text, sourcesUsed, styleApplied };
     })
     .filter((p) => Boolean(p.text));
 
@@ -241,6 +257,7 @@ export async function POST(req: Request) {
     let llmError: string | null = null;
     let bodies: string[] | null = null;
     let sourcesUsedSummary: Array<{ handle: string; count: number }> = [];
+    let styleAppliedSummary: string[] = [];
 
     if (useOpenAI) {
       try {
@@ -254,6 +271,12 @@ export async function POST(req: Request) {
         });
 
         bodies = posts.map((p) => p.text);
+
+        styleAppliedSummary = posts
+          .map((p) => String(p.styleApplied ?? "").trim())
+          .filter(Boolean)
+          .slice(0, 5);
+
         const counts = new Map<string, number>();
         for (const p of posts) {
           for (const s of p.sourcesUsed ?? []) {
@@ -272,6 +295,7 @@ export async function POST(req: Request) {
         llmError = e instanceof Error ? e.message : "Unknown error";
         bodies = null;
         sourcesUsedSummary = [];
+        styleAppliedSummary = [];
         generator = "mock";
       }
     }
@@ -285,6 +309,7 @@ export async function POST(req: Request) {
         sources: Number(sourcesCount ?? 0) > 0,
       },
       sourcesUsed: sourcesUsedSummary,
+      styleApplied: styleAppliedSummary,
       ids: {
         personaId: personaId || null,
         genreId: genreId || null,
