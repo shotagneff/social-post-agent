@@ -391,8 +391,14 @@ export default function SetupPage() {
         setSlotResult(`エラー: ${json?.error ?? "不明なエラー"}`);
         return null;
       }
-      setSlotResult(`投稿枠（投稿時間）を生成しました: ${json.created ?? 0} 件（requested=${json.requested ?? 0}）`);
-      return { created: Number(json.created ?? 0) || 0, requested: Number(json.requested ?? 0) || 0 };
+      const created = Number(json.created ?? 0) || 0;
+      const requested = Number(json.requested ?? 0) || 0;
+      if (created === 0 && requested > 0) {
+        setSlotResult(`投稿枠（投稿時間）は既に作成済みのようです（追加=0 / requested=${requested}）。`);
+      } else {
+        setSlotResult(`投稿枠（投稿時間）を生成しました: ${created} 件（requested=${requested}）`);
+      }
+      return { created, requested };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";
       setSlotResult(`エラー: ${msg}`);
@@ -930,7 +936,8 @@ export default function SetupPage() {
                 onClick={async () => {
                   await saveSchedulingPolicy();
                   const r = await generateSlots();
-                  if (!r || r.created <= 0) return;
+                  if (!r) return;
+                  if (r.created <= 0 && r.requested <= 0) return;
                   router.push(`/postdrafts?workspaceId=${encodeURIComponent(workspaceId)}`);
                 }}
               >
