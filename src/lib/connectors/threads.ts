@@ -95,7 +95,10 @@ export async function publishToThreadsText(args: {
       withAccessToken(`https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads_publish`, accessToken),
       { creation_id: creationId }
     );
-    const published = await postForm(publishUrl, {});
+    const published = await postForm(publishUrl, {
+      creation_id: creationId,
+      access_token: accessToken,
+    });
 
     if (!published.res.ok) {
       const retryable = published.res.status >= 500;

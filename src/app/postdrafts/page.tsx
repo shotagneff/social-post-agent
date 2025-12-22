@@ -411,6 +411,21 @@ export default function PostDraftsPage() {
     });
   }, [items, recentAfterIso, recentBaselineIds, recentOnly]);
 
+  const visibleTempCount = useMemo(
+    () => visibleItems.filter((x) => x.status === "TEMP_SCHEDULED").length,
+    [visibleItems],
+  );
+
+  const visibleGeneratedCount = useMemo(
+    () => visibleItems.filter((x) => x.status === "DRAFT_GENERATED").length,
+    [visibleItems],
+  );
+
+  const visibleConfirmedCount = useMemo(
+    () => visibleItems.filter((x) => x.status === "CONFIRMED").length,
+    [visibleItems],
+  );
+
   const groupedVisibleItems = useMemo(() => {
     const groups = new Map<string, PostDraftItem[]>();
     for (const it of visibleItems) {
@@ -448,6 +463,15 @@ export default function PostDraftsPage() {
     if (visibleItems.length > 0) return "";
     return "「直近の実行分のみ表示」がONのため、一覧が0件になっています。表示を戻すにはチェックをOFFにしてください。";
   }, [items.length, recentAfterIso, recentOnly, visibleItems.length]);
+
+  const recentFilterHiddenNotice = useMemo(() => {
+    if (!recentOnly) return "";
+    if (items.length === 0) return "";
+    if (visibleItems.length === 0) return "";
+    if (visibleTempCount > 0 || visibleConfirmedCount > 0) return "";
+    if (tempCount === 0 && confirmedCount === 0) return "";
+    return "「直近の実行分のみ表示」がONのため、既存の仮予約（TEMP_SCHEDULED）/確定（CONFIRMED）が隠れている可能性があります。今日の予定が見えない場合はチェックをOFFにしてください。";
+  }, [confirmedCount, items.length, recentOnly, tempCount, visibleConfirmedCount, visibleItems.length, visibleTempCount]);
 
   const stepLabels = ["投稿枠を作る", "大量生成＆仮予約", "確認して確定", "投稿実行"];
   const currentStepIndex = confirmedCount > 0 ? 3 : tempCount > 0 ? 2 : 1;
@@ -604,6 +628,11 @@ export default function PostDraftsPage() {
               <div className="mt-1 text-xs text-zinc-600">
                 DRAFT_GENERATED: {generatedCount} 件 / TEMP_SCHEDULED: {tempCount} 件 / CONFIRMED: {confirmedCount} 件
               </div>
+              {recentOnly ? (
+                <div className="mt-1 text-xs text-zinc-600">
+                  （表示中）DRAFT_GENERATED: {visibleGeneratedCount} 件 / TEMP_SCHEDULED: {visibleTempCount} 件 / CONFIRMED: {visibleConfirmedCount} 件
+                </div>
+              ) : null}
             </div>
             <label className="flex items-center gap-2 text-xs text-zinc-700">
               <input
@@ -619,6 +648,15 @@ export default function PostDraftsPage() {
           {recentFilterNotice ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
               <div>{recentFilterNotice}</div>
+              <button className="mt-2 rounded-lg border bg-white px-3 py-1.5 text-xs" onClick={() => setRecentOnly(false)}>
+                フィルタをOFFにする
+              </button>
+            </div>
+          ) : null}
+
+          {recentFilterHiddenNotice ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <div>{recentFilterHiddenNotice}</div>
               <button className="mt-2 rounded-lg border bg-white px-3 py-1.5 text-xs" onClick={() => setRecentOnly(false)}>
                 フィルタをOFFにする
               </button>
