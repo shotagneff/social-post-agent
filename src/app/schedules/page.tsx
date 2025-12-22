@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Schedule = {
   id: string;
@@ -41,7 +41,7 @@ export default function SchedulesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
-  const [statusFilter, setStatusFilter] = useState<"active" | "all">("active");
+  const [statusFilter, setStatusFilter] = useState<"due" | "active" | "all">("active");
 
   const [cronSecretConfigured, setCronSecretConfigured] = useState<boolean | null>(null);
 
@@ -93,17 +93,61 @@ export default function SchedulesPage() {
     load();
   }, []);
 
-  const dueCount = schedules.filter((s) => {
+  function isDue(s: Schedule) {
     if (s.status !== "waiting") return false;
     const effectiveConfirmed = Boolean(s.isConfirmed || s.draftId);
     if (!effectiveConfirmed) return false;
     return new Date(s.scheduledAt).getTime() <= Date.now();
-  }).length;
+  }
 
-  const visibleSchedules = schedules.filter((s) => {
-    if (statusFilter === "all") return true;
-    return s.status === "waiting" || s.status === "posting";
-  });
+  function ymd(dt: string) {
+    const d = new Date(dt);
+    if (Number.isNaN(d.getTime())) return "";
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const dueCount = schedules.filter((s) => isDue(s)).length;
+
+  const visibleSchedules = useMemo(() => {
+    return schedules.filter((s) => {
+      if (statusFilter === "all") return true;
+      if (statusFilter === "due") return isDue(s);
+      return s.status === "waiting" || s.status === "posting";
+    });
+  }, [schedules, statusFilter]);
+
+  const groupedVisibleSchedules = useMemo(() => {
+    const groups = new Map<string, Schedule[]>();
+    for (const s of visibleSchedules) {
+      const key = ymd(s.scheduledAt) || "unknown";
+      const arr = groups.get(key);
+      if (arr) arr.push(s);
+      else groups.set(key, [s]);
+    }
+
+    const keys = Array.from(groups.keys());
+    keys.sort((a, b) => {
+      if (a === "unknown" && b === "unknown") return 0;
+      if (a === "unknown") return 1;
+      if (b === "unknown") return -1;
+      return a.localeCompare(b);
+    });
+
+    return keys.map((k) => ({
+      key: k,
+      title: k === "unknown" ? "日付不明" : k,
+      items: (groups.get(k) ?? []).slice().sort((a, b) => {
+        const ax = new Date(a.scheduledAt).getTime();
+        const bx = new Date(b.scheduledAt).getTime();
+        const aa = Number.isFinite(ax) ? ax : 0;
+        const bb = Number.isFinite(bx) ? bx : 0;
+        return aa - bb;
+      }),
+    }));
+  }, [visibleSchedules]);
 
   const failedCount = schedules.filter((s) => s.status === "failed").length;
 
@@ -248,6 +292,12 @@ export default function SchedulesPage() {
           <div className="flex items-center gap-2">
             <div className="font-medium">表示</div>
             <button
+              className={`rounded border px-3 py-1 text-sm ${statusFilter === "due" ? "bg-black text-white" : ""}`}
+              onClick={() => setStatusFilter("due")}
+            >
+              処理対象（due）
+            </button>
+            <button
               className={`rounded border px-3 py-1 text-sm ${statusFilter === "active" ? "bg-black text-white" : ""}`}
               onClick={() => setStatusFilter("active")}
             >
@@ -286,60 +336,81 @@ export default function SchedulesPage() {
             <div className="col-span-1">操作</div>
           </div>
 
-          {visibleSchedules.map((s) => (
-            <div key={s.id} className="grid grid-cols-12 gap-2 border-b p-3 text-sm last:border-b-0">
-              {(() => {
-                const effectiveConfirmed = Boolean(s.isConfirmed || s.draftId);
-                const canCancel =
-                  s.status === "waiting" &&
-                  !s.published &&
-                  Boolean(s.postDraftId) &&
-                  !Boolean(s.draftId);
-                return (
-                  <>
-              <div className="col-span-4 break-words">
-                {s.draft?.theme
-                  ? s.draft.theme
-                  : s.postDraft?.body
-                    ? s.postDraft.body.slice(0, 60)
-                    : "（内容なし）"}
+          {groupedVisibleSchedules.flatMap((g) => {
+            const headerRow = (
+              <div key={`group-${g.key}`} className="border-b bg-zinc-50/70 px-3 py-2 text-xs font-semibold text-zinc-700">
+                {g.title}
               </div>
-              <div className="col-span-2">{s.platform}</div>
-              <div className="col-span-2 text-xs">{new Date(s.scheduledAt).toLocaleString()}</div>
-              <div className="col-span-2">
-                {s.status}
-                {!effectiveConfirmed ? <div className="mt-1 text-xs text-zinc-600">（未確定）</div> : null}
-              </div>
-              <div className="col-span-1 text-xs">
-                {s.published ? new Date(s.published.postedAt).toLocaleString() : "-"}
-              </div>
-              <div className="col-span-1">
-                {canCancel ? (
-                  <button
-                    className="rounded border px-2 py-1 text-xs disabled:opacity-50"
-                    disabled={Boolean(cancellingId)}
-                    onClick={() => cancelSchedule(s.id)}
-                  >
-                    {cancellingId === s.id ? "取消中..." : "取消"}
-                  </button>
-                ) : s.draftId ? (
-                  <Link className="underline" href={`/drafts/${encodeURIComponent(s.draftId)}`}>
-                    開く
-                  </Link>
-                ) : (
-                  <span className="text-zinc-400">-</span>
-                )}
-              </div>
-              {s.errorText ? (
-                <div className="col-span-12 mt-2 rounded border bg-white p-2 text-xs text-red-700">
-                  {s.errorText}
+            );
+
+            const rows = g.items.map((s) => {
+              const effectiveConfirmed = Boolean(s.isConfirmed || s.draftId);
+              const due = isDue(s);
+              const canCancel =
+                s.status === "waiting" &&
+                !s.published &&
+                Boolean(s.postDraftId) &&
+                !Boolean(s.draftId);
+
+              const rowClass =
+                due ? "bg-amber-50/70" : s.status === "posting" ? "bg-zinc-50/40" : "bg-white";
+
+              return (
+                <div key={s.id} className={`grid grid-cols-12 gap-2 border-b p-3 text-sm last:border-b-0 ${rowClass}`}>
+                  <div className="col-span-4 break-words">
+                    {s.draft?.theme
+                      ? s.draft.theme
+                      : s.postDraft?.body
+                        ? s.postDraft.body.slice(0, 60)
+                        : "（内容なし）"}
+                  </div>
+                  <div className="col-span-2">{s.platform}</div>
+                  <div className="col-span-2 text-xs">{new Date(s.scheduledAt).toLocaleString()}</div>
+                  <div className="col-span-2">
+                    <div className="flex items-center gap-2">
+                      {due ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                          due
+                        </span>
+                      ) : null}
+                      <span className={due ? "font-semibold text-amber-900" : ""}>{s.status}</span>
+                    </div>
+                    {!effectiveConfirmed ? <div className="mt-1 text-xs text-zinc-600">（未確定）</div> : null}
+                  </div>
+                  <div className="col-span-1 text-xs">
+                    {s.published ? new Date(s.published.postedAt).toLocaleString() : "-"}
+                  </div>
+                  <div className="col-span-1">
+                    {canCancel ? (
+                      <button
+                        className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+                        disabled={Boolean(cancellingId)}
+                        onClick={() => cancelSchedule(s.id)}
+                      >
+                        {cancellingId === s.id ? "取消中..." : "取消"}
+                      </button>
+                    ) : s.draftId ? (
+                      <Link className="underline" href={`/drafts/${encodeURIComponent(s.draftId)}`}>
+                        開く
+                      </Link>
+                    ) : (
+                      <span className="text-zinc-400">-</span>
+                    )}
+                  </div>
+                  {s.errorText ? (
+                    <div className="col-span-12 mt-2">
+                      <details className="rounded border bg-white p-2 text-xs text-red-700">
+                        <summary className="cursor-pointer select-none">エラー内容を表示</summary>
+                        <div className="mt-2 whitespace-pre-wrap">{s.errorText}</div>
+                      </details>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-                  </>
-                );
-              })()}
-            </div>
-          ))}
+              );
+            });
+
+            return [headerRow, ...rows];
+          })}
 
           {visibleSchedules.length === 0 ? (
             <div className="p-6 text-sm text-zinc-600">予約はまだありません。下書き詳細から予約を作成できます。</div>
