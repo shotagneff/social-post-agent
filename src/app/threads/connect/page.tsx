@@ -190,25 +190,15 @@ export default function ThreadsConnectPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Threads 連携</h1>
-          <div className="mt-1 text-sm text-zinc-600">
-            投稿先ごとにThreadsアカウントを連携します。連携すると、Threadsへの投稿を実行できます。
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Link className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-zinc-50" href="/postdrafts">
-            投稿案
-          </Link>
-          <Link className="rounded-lg border bg-white px-3 py-2 text-sm hover:bg-zinc-50" href="/setup">
-            セットアップ
-          </Link>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold">Threads 連携</h1>
+        <div className="mt-1 text-sm text-zinc-600">
+          投稿先（workspace）ごとにThreadsアカウントを連携します。連携すると、Threadsへの投稿を実行できます。
         </div>
       </div>
 
-      <div className="rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="spa-card p-6">
         <div className="text-sm font-semibold">1. 投稿先を選択</div>
         <div className="mt-2 text-sm text-zinc-600">
           連携したい投稿先を選んでください。投稿先は /setup で作成できます。
@@ -216,7 +206,7 @@ export default function ThreadsConnectPage() {
 
         <div className="mt-3">
           <select
-            className="w-full rounded-lg border px-3 py-2"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
             value={workspaceId}
             onChange={(e) => setWorkspaceId(e.target.value)}
             disabled={workspacesLoading}
@@ -231,10 +221,10 @@ export default function ThreadsConnectPage() {
         </div>
 
         {workspacesLoading ? <div className="mt-2 text-sm text-zinc-600">読み込み中…</div> : null}
-        {workspacesError ? <div className="mt-2 text-sm text-red-600">{workspacesError}</div> : null}
+        {workspacesError ? <div className="mt-2 text-sm text-red-700">{workspacesError}</div> : null}
       </div>
 
-      <div className="mt-4 rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="spa-card p-6">
         <div className="text-sm font-semibold">2. 連携状態</div>
 
         {!workspaceId.trim() ? (
@@ -274,9 +264,7 @@ export default function ThreadsConnectPage() {
 
         <div className="mt-4 flex flex-wrap gap-2">
           <a
-            className={`rounded-lg px-4 py-2 text-sm font-semibold text-white ${
-              workspaceId.trim() ? "bg-black hover:bg-zinc-800" : "bg-zinc-300"
-            }`}
+            className={`spa-button-primary ${workspaceId.trim() ? "" : "opacity-40 pointer-events-none"}`}
             href={connectUrl}
             onClick={(e) => {
               if (!workspaceId.trim()) e.preventDefault();
@@ -286,7 +274,7 @@ export default function ThreadsConnectPage() {
           </a>
 
           <button
-            className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
+            className="spa-button-secondary disabled:opacity-50"
             onClick={disconnect}
             disabled={!workspaceId.trim() || disconnecting}
           >
@@ -302,19 +290,26 @@ export default function ThreadsConnectPage() {
       </div>
 
       {showNextSteps ? (
-        <div className="mt-4 rounded-2xl border bg-white p-4 shadow-sm">
-          <div className="text-sm font-semibold">次にやること</div>
+        <div className="spa-card p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold">次にやること</div>
+            {status?.connected ? (
+              <span className="inline-flex items-center rounded-full bg-green-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                連携済み
+              </span>
+            ) : null}
+          </div>
           <div className="mt-2 text-sm text-zinc-600">
             連携ができたら、まずは投稿案を作って仮予約→確定へ進むのがおすすめです。
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link className="rounded-lg bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800" href={nextLinks.postDrafts}>
+            <Link className="spa-button-primary" href={nextLinks.postDrafts}>
               投稿案を作る（大量生成）
             </Link>
-            <Link className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-50" href={nextLinks.draftsNew}>
+            <Link className="spa-button-secondary" href={nextLinks.draftsNew}>
               下書きを作る（1件）
             </Link>
-            <Link className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-50" href={nextLinks.schedules}>
+            <Link className="spa-button-secondary" href={nextLinks.schedules}>
               予約を確認
             </Link>
           </div>
@@ -322,7 +317,7 @@ export default function ThreadsConnectPage() {
         </div>
       ) : null}
 
-      <div className="mt-4 rounded-2xl border bg-white p-4 shadow-sm">
+      <div className="spa-card p-6">
         <div className="text-sm font-semibold">補足</div>
         <div className="mt-2 text-sm text-zinc-600">
           投稿実行（cron）は「確定済み」の投稿のみを対象にします。投稿案の確定は /postdrafts から行ってください。
