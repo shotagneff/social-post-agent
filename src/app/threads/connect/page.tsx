@@ -178,7 +178,7 @@ export default function ThreadsConnectPage() {
         <div>
           <h1 className="text-2xl font-bold">Threads 連携</h1>
           <div className="mt-1 text-sm text-zinc-600">
-            ワークスペースごとにThreadsアカウントを連携します。連携すると、Threadsへの投稿を実行できます。
+            投稿先ごとにThreadsアカウントを連携します。連携すると、Threadsへの投稿を実行できます。
           </div>
         </div>
         <div className="flex gap-2">
@@ -192,9 +192,9 @@ export default function ThreadsConnectPage() {
       </div>
 
       <div className="rounded-2xl border bg-white p-4 shadow-sm">
-        <div className="text-sm font-semibold">1. ワークスペースを選択</div>
+        <div className="text-sm font-semibold">1. 投稿先を選択</div>
         <div className="mt-2 text-sm text-zinc-600">
-          連携したいワークスペースを選んでください。ワークスペースは /setup で作成できます。
+          連携したい投稿先を選んでください。投稿先は /setup で作成できます。
         </div>
 
         <div className="mt-3">
@@ -221,7 +221,7 @@ export default function ThreadsConnectPage() {
         <div className="text-sm font-semibold">2. 連携状態</div>
 
         {!workspaceId.trim() ? (
-          <div className="mt-2 text-sm text-zinc-600">先にワークスペースを選択してください。</div>
+          <div className="mt-2 text-sm text-zinc-600">先に投稿先を選択してください。</div>
         ) : statusLoading ? (
           <div className="mt-2 text-sm text-zinc-600">確認中…</div>
         ) : statusError ? (
@@ -229,7 +229,7 @@ export default function ThreadsConnectPage() {
         ) : status ? (
           <div className="mt-3 space-y-2 text-sm">
             <div>
-              <span className="font-semibold">ワークスペース:</span> {selectedWorkspace?.name ?? "-"}
+              <span className="font-semibold">投稿先:</span> {selectedWorkspace?.name ?? "-"}
             </div>
             <div>
               <span className="font-semibold">状態:</span>{" "}

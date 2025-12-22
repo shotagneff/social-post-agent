@@ -37,7 +37,7 @@ type SetupStep =
 function stepTitle(step: SetupStep) {
   switch (step) {
     case "workspace":
-      return "1. ワークスペース";
+      return "1. 投稿先";
     case "persona":
       return "2. ペルソナ";
     case "genre":
@@ -105,7 +105,7 @@ function addDaysYmd(ymd: string, days: number) {
 
 export default function SetupPage() {
   const router = useRouter();
-  const [workspaceName, setWorkspaceName] = useState("マイワークスペース");
+  const [workspaceName, setWorkspaceName] = useState("マイ投稿先");
   const [timezone, setTimezone] = useState("Asia/Tokyo");
   const [postingTargets, setPostingTargets] = useState<Platform[]>(["X"]);
 
@@ -222,7 +222,7 @@ export default function SetupPage() {
   ];
   const currentIndex = Math.max(0, stepOrder.indexOf(step));
   const stepLabels = [
-    "ワークスペース",
+    "投稿先",
     "ペルソナ",
     "ジャンル",
     "参照アカウント",
@@ -433,7 +433,7 @@ export default function SetupPage() {
         </div>
 
         <div className="rounded-lg border bg-white p-4 text-sm text-zinc-700">
-          まずはワークスペース（投稿の作業場所）を作成します。完了したら「下書きを作る」から投稿案の生成に進めます。
+          まずは投稿先を作成します。完了したら「下書きを作る」から投稿案の生成に進めます。
         </div>
 
         <div className="rounded-lg border bg-white p-4 text-sm">
@@ -447,7 +447,7 @@ export default function SetupPage() {
 
         {step === "workspace" ? (
           <div className="rounded-lg border bg-white p-4 space-y-3">
-            <div className="text-sm font-medium">ワークスペース</div>
+            <div className="text-sm font-medium">投稿先</div>
             {workspacesLoading ? <div className="text-xs text-zinc-600">読み込み中...</div> : null}
             {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
 
@@ -459,13 +459,13 @@ export default function SetupPage() {
                     checked={useExistingWorkspace}
                     onChange={(e) => setUseExistingWorkspace(e.target.checked)}
                   />
-                  既存のワークスペースを使う（おすすめ）
+                  既存の投稿先を使う（おすすめ）
                 </label>
 
                 {useExistingWorkspace ? (
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <label className="space-y-1">
-                      <div className="text-sm font-medium">ワークスペース選択</div>
+                      <div className="text-sm font-medium">投稿先を選択</div>
                       <select
                         className="w-full rounded border px-3 py-2"
                         value={selectedExistingWorkspaceId}
@@ -484,7 +484,7 @@ export default function SetupPage() {
                         disabled={!selectedExistingWorkspaceId.trim()}
                         onClick={useSelectedWorkspace}
                       >
-                        このワークスペースで続ける
+                        この投稿先で続ける
                       </button>
                     </div>
                   </div>
@@ -496,7 +496,7 @@ export default function SetupPage() {
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <label className="space-y-1">
-                    <div className="text-sm font-medium">ワークスペース名</div>
+                    <div className="text-sm font-medium">投稿先の名前</div>
                     <input
                       className="w-full rounded border px-3 py-2"
                       value={workspaceName}
@@ -654,7 +654,7 @@ export default function SetupPage() {
           <div className="rounded-lg border bg-white p-4 space-y-3">
             <div className="text-sm font-medium">確認</div>
             <div className="rounded border bg-white p-3 text-sm">
-              <div className="text-xs text-zinc-600">ワークスペース名</div>
+              <div className="text-xs text-zinc-600">投稿先の名前</div>
               <div className="font-medium">{workspaceName}</div>
               <div className="mt-2 text-xs text-zinc-600">タイムゾーン</div>
               <div className="font-medium">{timezone}</div>
