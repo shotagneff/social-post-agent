@@ -340,8 +340,14 @@ export default function PostDraftsPage() {
       }
 
       const meta = json1?.meta as any;
+      const sourcesActive = Number(meta?.counts?.sourcesActive ?? 0) || 0;
       const diag = meta?.used
-        ? `生成診断: persona=${meta.used.persona ? "OK" : "NG"} / genre=${meta.used.genre ? "OK" : "NG"} / sources=${meta.used.sources ? "OK" : "NG"}（active=${meta?.counts?.sourcesActive ?? 0}）`
+        ? [
+            "設定チェック（投稿文の精度に影響）",
+            `- ペルソナ: ${meta.used.persona ? "設定済み" : "未設定（/setup で設定）"}`,
+            `- ジャンル: ${meta.used.genre ? "設定済み" : "未設定（/setup で設定）"}`,
+            `- 参照アカウント: ${meta.used.sources ? `有効 ${sourcesActive}件` : "未設定（/setup の参照アカウントを追加）"}`,
+          ].join("\n")
         : "";
 
       const res2 = await fetch("/api/scheduling/assign", {
