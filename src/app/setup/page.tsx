@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -15,6 +15,15 @@ type CoreTimeWindow = {
   daysOfWeek: number[];
   startTime: string;
   endTime: string;
+};
+
+type WorkspaceItem = {
+  id: string;
+  name: string;
+  createdAt: string;
+  settings?: {
+    timezone: string;
+  } | null;
 };
 
 type SetupStep =
@@ -99,6 +108,13 @@ export default function SetupPage() {
   const [workspaceName, setWorkspaceName] = useState("マイワークスペース");
   const [timezone, setTimezone] = useState("Asia/Tokyo");
   const [postingTargets, setPostingTargets] = useState<Platform[]>(["X"]);
+
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(false);
+  const [workspacesError, setWorkspacesError] = useState<string>("");
+
+  const [useExistingWorkspace, setUseExistingWorkspace] = useState<boolean>(false);
+  const [selectedExistingWorkspaceId, setSelectedExistingWorkspaceId] = useState<string>("");
 
   const [personaJson, setPersonaJson] = useState(
     JSON.stringify(
@@ -214,6 +230,52 @@ export default function SetupPage() {
     "投稿枠",
   ];
 
+  useEffect(() => {
+    let canceled = false;
+    setWorkspacesLoading(true);
+    setWorkspacesError("");
+    fetch("/api/workspaces", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (canceled) return;
+        if (!json?.ok) {
+          setWorkspacesError(`エラー: ${json?.error ?? "不明なエラー"}`);
+          setWorkspaces([]);
+          return;
+        }
+
+        const list = Array.isArray(json.workspaces) ? (json.workspaces as WorkspaceItem[]) : [];
+        setWorkspaces(list);
+
+        const last = String(window.localStorage.getItem("lastWorkspaceId") ?? "").trim();
+        const initial = last || (list[0]?.id ?? "");
+        if (initial) {
+          setSelectedExistingWorkspaceId(initial);
+          setUseExistingWorkspace(true);
+        }
+      })
+      .catch((e) => {
+        if (canceled) return;
+        const msg = e instanceof Error ? e.message : "不明なエラー";
+        setWorkspacesError(`エラー: ${msg}`);
+        setWorkspaces([]);
+      })
+      .finally(() => {
+        if (canceled) return;
+        setWorkspacesLoading(false);
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (workspaceId.trim()) {
+      window.localStorage.setItem("lastWorkspaceId", workspaceId.trim());
+    }
+  }, [workspaceId]);
+
   async function submit() {
     setSubmitting(true);
     setResult("");
@@ -320,6 +382,16 @@ export default function SetupPage() {
     setPostingTargets((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
   }
 
+  function useSelectedWorkspace() {
+    const id = String(selectedExistingWorkspaceId ?? "").trim();
+    if (!id) return;
+    setWorkspaceId(id);
+    setResult(`選択中: workspaceId=${id}`);
+    setPolicyResult("");
+    setSlotResult("");
+    setStep("scheduling");
+  }
+
   function toggleDay(windowIndex: number, day: number) {
     setCoreTimeWindows((prev) => {
       const next = [...prev];
@@ -376,56 +448,104 @@ export default function SetupPage() {
         {step === "workspace" ? (
           <div className="rounded-lg border bg-white p-4 space-y-3">
             <div className="text-sm font-medium">ワークスペース</div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="space-y-1">
-                <div className="text-sm font-medium">ワークスペース名</div>
-                <input
-                  className="w-full rounded border px-3 py-2"
-                  value={workspaceName}
-                  onChange={(e) => setWorkspaceName(e.target.value)}
-                />
-              </label>
-              <label className="space-y-1">
-                <div className="text-sm font-medium">タイムゾーン</div>
-                <input
-                  className="w-full rounded border px-3 py-2"
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                />
-              </label>
-            </div>
+            {workspacesLoading ? <div className="text-xs text-zinc-600">読み込み中...</div> : null}
+            {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
 
-            <div className="space-y-2">
-              <div className="text-sm font-medium">投稿先（テスト用）</div>
-              <div className="flex gap-3 text-sm">
-                <label className="flex items-center gap-2">
+            {workspaces.length > 0 ? (
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={postingTargets.includes("X")}
-                    onChange={() => togglePostingTarget("X")}
+                    checked={useExistingWorkspace}
+                    onChange={(e) => setUseExistingWorkspace(e.target.checked)}
                   />
-                  X
+                  既存のワークスペースを使う（おすすめ）
                 </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={postingTargets.includes("THREADS")}
-                    onChange={() => togglePostingTarget("THREADS")}
-                  />
-                  Threads
-                </label>
+
+                {useExistingWorkspace ? (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label className="space-y-1">
+                      <div className="text-sm font-medium">ワークスペース選択</div>
+                      <select
+                        className="w-full rounded border px-3 py-2"
+                        value={selectedExistingWorkspaceId}
+                        onChange={(e) => setSelectedExistingWorkspaceId(e.target.value)}
+                      >
+                        {workspaces.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name} ({w.id.slice(0, 8)}...)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="flex items-end justify-end">
+                      <button
+                        className="w-full rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50 md:w-auto"
+                        disabled={!selectedExistingWorkspaceId.trim()}
+                        onClick={useSelectedWorkspace}
+                      >
+                        このワークスペースで続ける
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </div>
+            ) : null}
 
-            <div className="flex items-center justify-end gap-2">
-              <button
-                className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
-                disabled={!canGoNextWorkspace}
-                onClick={() => setStep("persona")}
-              >
-                次へ
-              </button>
-            </div>
+            {!useExistingWorkspace ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label className="space-y-1">
+                    <div className="text-sm font-medium">ワークスペース名</div>
+                    <input
+                      className="w-full rounded border px-3 py-2"
+                      value={workspaceName}
+                      onChange={(e) => setWorkspaceName(e.target.value)}
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <div className="text-sm font-medium">タイムゾーン</div>
+                    <input
+                      className="w-full rounded border px-3 py-2"
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">投稿先（テスト用）</div>
+                  <div className="flex gap-3 text-sm">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={postingTargets.includes("X")}
+                        onChange={() => togglePostingTarget("X")}
+                      />
+                      X
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={postingTargets.includes("THREADS")}
+                        onChange={() => togglePostingTarget("THREADS")}
+                      />
+                      Threads
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+                    disabled={!canGoNextWorkspace}
+                    onClick={() => setStep("persona")}
+                  >
+                    次へ
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
