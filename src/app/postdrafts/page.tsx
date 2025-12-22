@@ -53,6 +53,20 @@ function fmt(dt: string | null) {
   return d.toLocaleString();
 }
 
+function ymd(dt: string | null) {
+  if (!dt) return "";
+  const d = new Date(dt);
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function effectiveScheduledAt(it: PostDraftItem) {
+  return it.tempScheduledAt || it.slot?.scheduledAt || null;
+}
+
 function ConfirmedBadge(props: { confirmedAt: string | null }) {
   const { confirmedAt } = props;
   if (!confirmedAt) {
@@ -392,6 +406,36 @@ export default function PostDraftsPage() {
     });
   }, [items, recentAfterIso, recentBaselineIds, recentOnly]);
 
+  const groupedVisibleItems = useMemo(() => {
+    const groups = new Map<string, PostDraftItem[]>();
+    for (const it of visibleItems) {
+      const key = ymd(effectiveScheduledAt(it)) || "unscheduled";
+      const arr = groups.get(key);
+      if (arr) arr.push(it);
+      else groups.set(key, [it]);
+    }
+
+    const keys = Array.from(groups.keys());
+    keys.sort((a, b) => {
+      if (a === "unscheduled" && b === "unscheduled") return 0;
+      if (a === "unscheduled") return 1;
+      if (b === "unscheduled") return -1;
+      return a.localeCompare(b);
+    });
+
+    return keys.map((k) => ({
+      key: k,
+      title: k === "unscheduled" ? "未予約" : k,
+      items: (groups.get(k) ?? []).slice().sort((x, y) => {
+        const ax = new Date(effectiveScheduledAt(x) || x.createdAt).getTime();
+        const ay = new Date(effectiveScheduledAt(y) || y.createdAt).getTime();
+        const bx = Number.isFinite(ax) ? ax : 0;
+        const by = Number.isFinite(ay) ? ay : 0;
+        return bx - by;
+      }),
+    }));
+  }, [visibleItems]);
+
   const recentFilterNotice = useMemo(() => {
     if (!recentOnly) return "";
     if (!recentAfterIso.trim()) return "";
@@ -568,7 +612,7 @@ export default function PostDraftsPage() {
                 <tr>
                   <th className="px-3 py-2 text-left">Platform</th>
                   <th className="px-3 py-2 text-left">Status</th>
-                  <th className="px-3 py-2 text-left">仮予約</th>
+                  <th className="px-3 py-2 text-left">予定（仮予約）</th>
                   <th className="px-3 py-2 text-left">確定</th>
                   <th className="px-3 py-2 text-left">本文</th>
                   <th className="px-3 py-2 text-left">操作</th>
@@ -583,32 +627,62 @@ export default function PostDraftsPage() {
                     </td>
                   </tr>
                 ) : (
-                  visibleItems.map((it) => (
-                    <tr key={it.id} className="border-t">
-                      <td className="px-3 py-2 font-medium">{it.platform}</td>
-                      <td className="px-3 py-2">{it.status}</td>
-                      <td className="px-3 py-2">{fmt(it.tempScheduledAt)}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-col gap-1">
-                          <ConfirmedBadge confirmedAt={it.confirmedAt} />
-                          <span className={it.confirmedAt ? "text-xs text-zinc-700" : "text-xs text-amber-900"}>
-                            {it.confirmedAt ? fmt(it.confirmedAt) : "-"}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-zinc-700">{clip(it.body, 80)}</td>
-                      <td className="px-3 py-2">
-                        <button
-                          className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-zinc-50 disabled:opacity-50"
-                          disabled={working}
-                          onClick={() => openDetail(it.id)}
-                        >
-                          開く
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-zinc-700">{it.id}</td>
-                    </tr>
-                  ))
+                  groupedVisibleItems.flatMap((g) => {
+                    const headerRow = (
+                      <tr key={`group-${g.key}`} className="border-t bg-zinc-50/60">
+                        <td className="px-3 py-2 text-xs font-semibold text-zinc-700" colSpan={7}>
+                          {g.title}
+                        </td>
+                      </tr>
+                    );
+
+                    const rows = g.items.map((it) => {
+                      const isWaitingLike = it.status === "CONFIRMED";
+                      const rowClass = isWaitingLike
+                        ? "border-t bg-emerald-50/70"
+                        : it.status === "TEMP_SCHEDULED"
+                          ? "border-t bg-white"
+                          : "border-t";
+
+                      return (
+                        <tr key={it.id} className={rowClass}>
+                          <td className="px-3 py-2 font-medium">{it.platform}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              {isWaitingLike ? (
+                                <span className="inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                                  waiting
+                                </span>
+                              ) : null}
+                              <span className={isWaitingLike ? "font-semibold text-emerald-900" : ""}>{it.status}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">{fmt(effectiveScheduledAt(it))}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-col gap-1">
+                              <ConfirmedBadge confirmedAt={it.confirmedAt} />
+                              <span className={it.confirmedAt ? "text-xs text-zinc-700" : "text-xs text-amber-900"}>
+                                {it.confirmedAt ? fmt(it.confirmedAt) : "-"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-zinc-700">{clip(it.body, 80)}</td>
+                          <td className="px-3 py-2">
+                            <button
+                              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-zinc-50 disabled:opacity-50"
+                              disabled={working}
+                              onClick={() => openDetail(it.id)}
+                            >
+                              開く
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-zinc-700">{it.id}</td>
+                        </tr>
+                      );
+                    });
+
+                    return [headerRow, ...rows];
+                  })
                 )}
               </tbody>
             </table>
