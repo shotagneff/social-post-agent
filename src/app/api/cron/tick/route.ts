@@ -123,7 +123,7 @@ async function processOneSchedule(scheduleId: string) {
           status: "failed" as const,
           draftId: claimed.draftId ?? null,
           postDraftId: claimed.postDraftId ?? null,
-          errorText: "Threads連携が未設定です。/threads/connect でワークスペースを選んで連携してください。",
+          errorText: "Threads連携が未設定です。/threads/connect で投稿先を選んで連携してください。",
         };
       }
 

@@ -26,7 +26,7 @@ export default function DataDeletionPage() {
               <a className="underline" href="/threads/connect">
                 /threads/connect
               </a>
-              を開き、該当ワークスペースを選択します。
+              を開き、該当投稿先を選択します。
             </li>
             <li>「解除する（Disconnect）」を実行します。</li>
             <li>解除後、しばらくしてから再度状態を確認し、連携が解除されていることを確認します。</li>

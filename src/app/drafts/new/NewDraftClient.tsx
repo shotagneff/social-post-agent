@@ -89,7 +89,7 @@ export default function NewDraftClient() {
         const res = await fetch("/api/workspaces");
         const json = (await res.json().catch(() => null)) as any;
         if (!json?.ok) {
-          setWorkspacesError(String(json?.error ?? "ワークスペース一覧の読み込みに失敗しました"));
+          setWorkspacesError(String(json?.error ?? "投稿先一覧の読み込みに失敗しました"));
           setWorkspaces([]);
           return;
         }

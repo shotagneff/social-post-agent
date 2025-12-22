@@ -22,7 +22,7 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-2 text-sm text-zinc-800">
           <h2 className="text-base font-medium">利用目的</h2>
           <p>
-            取得した情報は、ユーザーが指定したワークスペースにおけるThreadsへの投稿・投稿管理（予約投稿の実行など）のために利用します。
+            取得した情報は、ユーザーが指定した投稿先におけるThreadsへの投稿・投稿管理（予約投稿の実行など）のために利用します。
           </p>
         </section>
 
