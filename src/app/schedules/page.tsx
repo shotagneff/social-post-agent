@@ -499,7 +499,6 @@ export default function SchedulesPage() {
             <div className="p-6 text-sm text-zinc-600">予約はまだありません。下書き詳細から予約を作成できます。</div>
           ) : null}
         </div>
-      </div>
     </div>
   );
 }
