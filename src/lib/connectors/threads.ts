@@ -31,6 +31,12 @@ async function postForm(url: string, form: Record<string, string>) {
   return { res, text, json };
 }
 
+function withAccessToken(url: string, accessToken: string) {
+  const u = new URL(url);
+  u.searchParams.set("access_token", accessToken);
+  return u.toString();
+}
+
 export async function publishToThreadsText(args: {
   text: string;
   accessToken: string;
@@ -55,11 +61,13 @@ export async function publishToThreadsText(args: {
       return { ok: false, error: "text is empty", retryable: false };
     }
 
-    const createUrl = `https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads`;
+    const createUrl = withAccessToken(
+      `https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads`,
+      accessToken
+    );
     const created = await postForm(createUrl, {
       media_type: "TEXT",
       text: trimmed,
-      access_token: accessToken,
     });
 
     if (!created.res.ok) {
@@ -75,10 +83,12 @@ export async function publishToThreadsText(args: {
       return { ok: false, error: "Threads create returned no id", retryable: false, raw: created.json };
     }
 
-    const publishUrl = `https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads_publish`;
+    const publishUrl = withAccessToken(
+      `https://graph.threads.net/${version}/${encodeURIComponent(userId)}/threads_publish`,
+      accessToken
+    );
     const published = await postForm(publishUrl, {
       creation_id: creationId,
-      access_token: accessToken,
     });
 
     if (!published.res.ok) {
