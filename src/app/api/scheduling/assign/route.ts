@@ -11,6 +11,7 @@ type AssignBody = {
   workspaceId?: string;
   platform?: Platform;
   limit?: number;
+  minLeadMinutes?: number;
 };
 
 function isPlatform(value: unknown): value is Platform {
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
     }
 
     const now = new Date();
-    const minLeadMinutes = 10;
+    const minLeadMinutes = Math.max(0, Math.min(60, Number(body.minLeadMinutes ?? 10) || 0));
     const minScheduledAt = new Date(now.getTime() + minLeadMinutes * 60 * 1000);
 
     const limit = Math.max(1, Math.min(200, Number(body.limit ?? 50) || 50));
@@ -106,7 +107,7 @@ export async function POST(req: Request) {
         ok: true,
         assigned: 0,
         reason: "no_postdrafts",
-        diagnostics: { totalSlots, unassignedSlots, draftGenerated, limit, platform: platform ?? null },
+        diagnostics: { totalSlots, unassignedSlots, draftGenerated, limit, platform: platform ?? null, minLeadMinutes },
         hint: "仮予約対象の投稿案がありません。先に『大量生成して仮予約を作成』で投稿案を作ってください。",
       });
     }

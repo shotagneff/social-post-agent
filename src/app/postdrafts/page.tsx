@@ -131,6 +131,8 @@ export default function PostDraftsPage() {
   const [count, setCount] = useState<number>(30);
   const [theme, setTheme] = useState<string>("テーマ（仮）");
 
+  const [testModeImmediate, setTestModeImmediate] = useState(false);
+
   const [working, setWorking] = useState(false);
   const [result, setResult] = useState<string>("");
 
@@ -344,6 +346,7 @@ export default function PostDraftsPage() {
           workspaceId,
           platform,
           limit: Math.max(1, Math.min(200, Number(count) || 30)),
+          minLeadMinutes: testModeImmediate ? 0 : undefined,
         }),
       });
 
@@ -362,7 +365,9 @@ export default function PostDraftsPage() {
         return;
       }
 
-      setResult(`作成しました: ${json1.created ?? 0} 件 / 仮予約: ${assigned} 件`);
+      setResult(
+        `作成しました: ${json1.created ?? 0} 件 / 仮予約: ${assigned} 件${testModeImmediate ? "（テストモード: 直近OK）" : ""}`,
+      );
       await reload();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";
@@ -489,6 +494,22 @@ export default function PostDraftsPage() {
           <div className="text-xs text-zinc-600">
             ボタンは基本これ1つです。「大量生成→仮予約」まで自動で行い、その後に内容を見て確定します。
           </div>
+
+          <label className="flex items-center gap-2 text-xs text-zinc-700">
+            <input
+              type="checkbox"
+              checked={testModeImmediate}
+              onChange={(e) => setTestModeImmediate(e.target.checked)}
+              disabled={!canRun || working}
+            />
+            テストモード: 直近の仮予約も許可（minLeadMinutes=0）
+          </label>
+
+          {testModeImmediate ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              テストを早く回すためのモードです。本番運用ではOFF推奨です（直近すぎる枠は投稿処理に間に合わない可能性があります）。
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <label className="space-y-2">
