@@ -54,7 +54,7 @@ function stepTitle(step: SetupStep) {
 function Stepper(props: { steps: string[]; currentIndex: number }) {
   const { steps, currentIndex } = props;
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="spa-card p-4">
       <div className="flex flex-wrap gap-2">
         {steps.map((label, idx) => {
           const done = idx < currentIndex;
@@ -453,30 +453,30 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-6">
-      <div className="mx-auto max-w-4xl space-y-6">
-        <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
           <h1 className="text-2xl font-semibold">初期セットアップ</h1>
-          <Link href="/" className="text-sm underline">
-            ホーム
-          </Link>
+          <div className="mt-1 text-sm text-zinc-600">投稿先の作成→投稿枠の生成までを1画面で進めます。</div>
         </div>
+        <Link href="/postdrafts" className="spa-button-secondary">
+          PostDraftへ
+        </Link>
+      </div>
 
-        <div className="rounded-lg border bg-white p-4 text-sm text-zinc-700">
-          まずは投稿先を作成します。完了したら「下書きを作る」から投稿案の生成に進めます。
-        </div>
+      <div className="spa-card p-4 text-sm text-zinc-700">
+        まずは投稿先を作成します。完了したら /threads/connect で連携し、/postdrafts で投稿案を作成→確定へ進みます。
+      </div>
 
-        <div className="rounded-lg border bg-white p-4 text-sm">
-          <div className="font-medium">いまのステップ: {stepTitle(step)}</div>
-          <div className="mt-1 text-xs text-zinc-600">
-            すべて入力し終わったら確認画面で「セットアップを実行」できます。
-          </div>
-        </div>
+      <div className="spa-card p-4 text-sm">
+        <div className="font-medium">いまのステップ: {stepTitle(step)}</div>
+        <div className="mt-1 text-xs text-zinc-600">すべて入力し終わったら確認画面で「セットアップを実行」できます。</div>
+      </div>
 
-        <Stepper steps={stepLabels} currentIndex={currentIndex} />
+      <Stepper steps={stepLabels} currentIndex={currentIndex} />
 
-        {step === "workspace" ? (
-          <div className="rounded-lg border bg-white p-4 space-y-3">
+      {step === "workspace" ? (
+          <div className="spa-card p-6 space-y-3">
             <div className="text-sm font-medium">投稿先</div>
             {workspacesLoading ? <div className="text-xs text-zinc-600">読み込み中...</div> : null}
             {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
@@ -497,7 +497,7 @@ export default function SetupPage() {
                     <label className="space-y-1">
                       <div className="text-sm font-medium">投稿先を選択</div>
                       <select
-                        className="w-full rounded border px-3 py-2"
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                         value={selectedExistingWorkspaceId}
                         onChange={(e) => setSelectedExistingWorkspaceId(e.target.value)}
                       >
@@ -510,7 +510,7 @@ export default function SetupPage() {
                     </label>
                     <div className="flex items-end justify-end">
                       <button
-                        className="w-full rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50 md:w-auto"
+                        className="spa-button-primary w-full disabled:opacity-50 md:w-auto"
                         disabled={!selectedExistingWorkspaceId.trim()}
                         onClick={useSelectedWorkspace}
                       >
@@ -528,7 +528,7 @@ export default function SetupPage() {
                   <label className="space-y-1">
                     <div className="text-sm font-medium">投稿先の名前</div>
                     <input
-                      className="w-full rounded border px-3 py-2"
+                      className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                       value={workspaceName}
                       onChange={(e) => setWorkspaceName(e.target.value)}
                     />
@@ -536,7 +536,7 @@ export default function SetupPage() {
                   <label className="space-y-1">
                     <div className="text-sm font-medium">タイムゾーン</div>
                     <input
-                      className="w-full rounded border px-3 py-2"
+                      className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                       value={timezone}
                       onChange={(e) => setTimezone(e.target.value)}
                     />
@@ -567,7 +567,7 @@ export default function SetupPage() {
 
                 <div className="flex items-center justify-end gap-2">
                   <button
-                    className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+                    className="spa-button-primary disabled:opacity-50"
                     disabled={!canGoNextWorkspace}
                     onClick={() => setStep("persona")}
                   >
@@ -580,13 +580,13 @@ export default function SetupPage() {
         ) : null}
 
         {step === "persona" ? (
-          <div className="rounded-lg border bg-white p-4 space-y-3">
+          <div className="spa-card p-6 space-y-3">
             <div className="text-sm font-medium">ペルソナ（JSON）</div>
             <div className="text-xs text-zinc-600">
               投稿文の口調・前提・NG表現などを設定します（まずは空のままでOK）。
             </div>
             <textarea
-              className="w-full rounded border p-3 font-mono text-xs"
+              className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
               rows={12}
               value={personaJson}
               onChange={(e) => setPersonaJson(e.target.value)}
@@ -596,11 +596,11 @@ export default function SetupPage() {
             ) : null}
 
             <div className="flex items-center justify-between gap-2">
-              <button className="rounded border px-4 py-2 text-sm" onClick={() => setStep("workspace")}>
+              <button className="spa-button-secondary" onClick={() => setStep("workspace")}>
                 戻る
               </button>
               <button
-                className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+                className="spa-button-primary disabled:opacity-50"
                 disabled={!canGoNextPersona}
                 onClick={() => setStep("genre")}
               >
@@ -611,20 +611,20 @@ export default function SetupPage() {
         ) : null}
 
         {step === "genre" ? (
-          <div className="rounded-lg border bg-white p-4 space-y-3">
+          <div className="spa-card p-6 space-y-3">
             <div className="text-sm font-medium">ジャンル（JSON）</div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="space-y-1">
                 <div className="text-sm font-medium">ジャンルキー</div>
                 <input
-                  className="w-full rounded border px-3 py-2"
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                   value={genreKey}
                   onChange={(e) => setGenreKey(e.target.value)}
                 />
               </label>
             </div>
             <textarea
-              className="w-full rounded border p-3 font-mono text-xs"
+              className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
               rows={12}
               value={genreJson}
               onChange={(e) => setGenreJson(e.target.value)}
@@ -634,11 +634,11 @@ export default function SetupPage() {
             ) : null}
 
             <div className="flex items-center justify-between gap-2">
-              <button className="rounded border px-4 py-2 text-sm" onClick={() => setStep("persona")}>
+              <button className="spa-button-secondary" onClick={() => setStep("persona")}>
                 戻る
               </button>
               <button
-                className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+                className="spa-button-primary disabled:opacity-50"
                 disabled={!canGoNextGenre}
                 onClick={() => setStep("sources")}
               >
@@ -649,13 +649,13 @@ export default function SetupPage() {
         ) : null}
 
         {step === "sources" ? (
-          <div className="rounded-lg border bg-white p-4 space-y-3">
+          <div className="spa-card p-6 space-y-3">
             <div className="text-sm font-medium">参照アカウント</div>
             <div className="text-xs text-zinc-600">
               ここで指定したアカウントの投稿を、将来の学習/分析の入力として使う想定です（いまはテスト用）。
             </div>
             <textarea
-              className="w-full rounded border p-3 font-mono text-xs"
+              className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
               rows={6}
               value={sourceAccountsText}
               onChange={(e) => setSourceAccountsText(e.target.value)}
@@ -666,11 +666,11 @@ export default function SetupPage() {
             ) : null}
 
             <div className="flex items-center justify-between gap-2">
-              <button className="rounded border px-4 py-2 text-sm" onClick={() => setStep("genre")}>
+              <button className="spa-button-secondary" onClick={() => setStep("genre")}>
                 戻る
               </button>
               <button
-                className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+                className="spa-button-primary disabled:opacity-50"
                 disabled={!canGoNextSources}
                 onClick={() => setStep("confirm")}
               >
@@ -681,9 +681,9 @@ export default function SetupPage() {
         ) : null}
 
         {step === "confirm" ? (
-          <div className="rounded-lg border bg-white p-4 space-y-3">
+          <div className="spa-card p-6 space-y-3">
             <div className="text-sm font-medium">確認</div>
-            <div className="rounded border bg-white p-3 text-sm">
+            <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">
               <div className="text-xs text-zinc-600">投稿先の名前</div>
               <div className="font-medium">{workspaceName}</div>
               <div className="mt-2 text-xs text-zinc-600">タイムゾーン</div>
@@ -697,11 +697,11 @@ export default function SetupPage() {
             </div>
 
             <div className="flex items-center justify-between gap-2">
-              <button className="rounded border px-4 py-2 text-sm" onClick={() => setStep("sources")}>
+              <button className="spa-button-secondary" onClick={() => setStep("sources")}>
                 戻る
               </button>
               <button
-                className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+                className="spa-button-primary disabled:opacity-50"
                 disabled={submitting || !canRun}
                 onClick={submit}
               >
@@ -716,7 +716,7 @@ export default function SetupPage() {
         ) : null}
 
         {step === "scheduling" && workspaceId ? (
-          <div className="rounded-2xl border bg-white p-6 shadow-sm space-y-5">
+          <div className="spa-card p-6 space-y-5">
             <div className="flex flex-col gap-1">
               <div className="text-sm font-semibold tracking-tight">投稿枠（スケジューリング）</div>
               <div className="text-xs text-zinc-600">
@@ -726,7 +726,7 @@ export default function SetupPage() {
 
             <div className="flex items-center justify-end">
               <button
-                className="rounded border px-3 py-1.5 text-xs"
+                className="spa-button-secondary px-3 py-1.5 text-xs"
                 onClick={() => {
                   setUseExistingWorkspace(false);
                   setStep("workspace");
@@ -931,7 +931,7 @@ export default function SetupPage() {
 
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
               <button
-                className="rounded-xl bg-black px-4 py-2 text-sm text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+                className="spa-button-primary disabled:opacity-50"
                 disabled={policySaving || slotGenerating}
                 onClick={async () => {
                   await saveSchedulingPolicy();
@@ -945,13 +945,11 @@ export default function SetupPage() {
               </button>
             </div>
 
-            {policyResult ? <div className="rounded-xl border bg-white p-3 text-sm">{policyResult}</div> : null}
-            {slotResult ? <div className="rounded-xl border bg-white p-3 text-sm">{slotResult}</div> : null}
+            {policyResult ? <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">{policyResult}</div> : null}
+            {slotResult ? <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">{slotResult}</div> : null}
           </div>
         ) : null}
 
-        {result ? <div className="rounded border bg-white p-3 text-sm">{result}</div> : null}
-      </div>
-    </div>
+        {result ? <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">{result}</div> : null}
   );
 }
