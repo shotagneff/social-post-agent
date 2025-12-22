@@ -41,6 +41,8 @@ export default function SchedulesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
+  const [statusFilter, setStatusFilter] = useState<"active" | "all">("active");
+
   const [cronSecretConfigured, setCronSecretConfigured] = useState<boolean | null>(null);
 
   const cronModeText = cronSecretConfigured
@@ -52,6 +54,9 @@ export default function SchedulesPage() {
 
   const [cancellingId, setCancellingId] = useState<string>("");
   const [cancelResult, setCancelResult] = useState<string>("");
+
+  const [clearingFailed, setClearingFailed] = useState(false);
+  const [clearFailedResult, setClearFailedResult] = useState<string>("");
 
   async function load() {
     setLoading(true);
@@ -94,6 +99,13 @@ export default function SchedulesPage() {
     if (!effectiveConfirmed) return false;
     return new Date(s.scheduledAt).getTime() <= Date.now();
   }).length;
+
+  const visibleSchedules = schedules.filter((s) => {
+    if (statusFilter === "all") return true;
+    return s.status === "waiting" || s.status === "posting";
+  });
+
+  const failedCount = schedules.filter((s) => s.status === "failed").length;
 
   async function runTick() {
     setTicking(true);
@@ -142,6 +154,32 @@ export default function SchedulesPage() {
       setCancelResult(`エラー: ${msg}`);
     } finally {
       setCancellingId("");
+    }
+  }
+
+  async function clearFailedSchedules() {
+    if (clearingFailed) return;
+    if (failedCount === 0) return;
+
+    const ok = window.confirm(`failed の予約を ${failedCount} 件削除します。よろしいですか？`);
+    if (!ok) return;
+
+    setClearingFailed(true);
+    setClearFailedResult("");
+    try {
+      const res = await fetch("/api/schedules/failed", { method: "DELETE" });
+      const json = (await res.json().catch(() => null)) as any;
+      if (!json?.ok) {
+        setClearFailedResult(`エラー: ${json?.error ?? "不明なエラー"}`);
+        return;
+      }
+      setClearFailedResult(`failed を ${Number(json.deleted ?? 0) || 0} 件削除しました。`);
+      await load();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "不明なエラー";
+      setClearFailedResult(`エラー: ${msg}`);
+    } finally {
+      setClearingFailed(false);
     }
   }
 
@@ -200,9 +238,39 @@ export default function SchedulesPage() {
           )}
           {tickResult ? <div className="text-sm">{tickResult}</div> : null}
           {cancelResult ? <div className="text-sm">{cancelResult}</div> : null}
+          {clearFailedResult ? <div className="text-sm">{clearFailedResult}</div> : null}
           <button className="rounded border px-3 py-2 text-sm" disabled={loading} onClick={load}>
             再読み込み
           </button>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border bg-white p-4 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="font-medium">表示</div>
+            <button
+              className={`rounded border px-3 py-1 text-sm ${statusFilter === "active" ? "bg-black text-white" : ""}`}
+              onClick={() => setStatusFilter("active")}
+            >
+              稼働中（waiting/posting）
+            </button>
+            <button
+              className={`rounded border px-3 py-1 text-sm ${statusFilter === "all" ? "bg-black text-white" : ""}`}
+              onClick={() => setStatusFilter("all")}
+            >
+              すべて
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-zinc-600">failed: {failedCount} 件</div>
+            <button
+              className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+              disabled={clearingFailed || failedCount === 0}
+              onClick={clearFailedSchedules}
+            >
+              {clearingFailed ? "failed削除中..." : "failedを一括削除"}
+            </button>
+          </div>
         </div>
 
         {loading ? <div className="text-sm text-zinc-600">読み込み中...</div> : null}
@@ -218,7 +286,7 @@ export default function SchedulesPage() {
             <div className="col-span-1">操作</div>
           </div>
 
-          {schedules.map((s) => (
+          {visibleSchedules.map((s) => (
             <div key={s.id} className="grid grid-cols-12 gap-2 border-b p-3 text-sm last:border-b-0">
               {(() => {
                 const effectiveConfirmed = Boolean(s.isConfirmed || s.draftId);
@@ -273,7 +341,7 @@ export default function SchedulesPage() {
             </div>
           ))}
 
-          {schedules.length === 0 ? (
+          {visibleSchedules.length === 0 ? (
             <div className="p-6 text-sm text-zinc-600">予約はまだありません。下書き詳細から予約を作成できます。</div>
           ) : null}
         </div>

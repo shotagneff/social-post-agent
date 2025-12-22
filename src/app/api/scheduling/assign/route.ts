@@ -26,6 +26,8 @@ export async function POST(req: Request) {
     }
 
     const now = new Date();
+    const minLeadMinutes = 10;
+    const minScheduledAt = new Date(now.getTime() + minLeadMinutes * 60 * 1000);
 
     const limit = Math.max(1, Math.min(200, Number(body.limit ?? 50) || 50));
     const platform = body.platform;
@@ -60,7 +62,7 @@ export async function POST(req: Request) {
       where: {
         workspaceId,
         assignedPostDraftId: null,
-        scheduledAt: { gt: now },
+        scheduledAt: { gt: minScheduledAt },
         ...(platform ? { platform } : {}),
       },
       orderBy: { scheduledAt: "asc" },
@@ -73,11 +75,18 @@ export async function POST(req: Request) {
         ok: true,
         assigned: 0,
         reason: totalSlots === 0 ? "no_slots_generated" : "no_slots_available",
-        diagnostics: { totalSlots, unassignedSlots, draftGenerated, limit, platform: platform ?? null },
+        diagnostics: {
+          totalSlots,
+          unassignedSlots,
+          draftGenerated,
+          limit,
+          platform: platform ?? null,
+          minLeadMinutes,
+        },
         hint:
           totalSlots === 0
             ? "投稿枠（投稿時間）がまだ生成されていません。/setup で『保存して投稿枠を生成』を実行してください。"
-            : "投稿枠の空きがありません。期間を延ばして投稿枠を追加生成するか、件数を減らしてください。",
+            : `投稿枠の空きがありません（仮予約は今から${minLeadMinutes}分以上先のみ対象）。期間を延ばして投稿枠を追加生成するか、件数を減らしてください。`,
       });
     }
 
@@ -177,7 +186,7 @@ export async function POST(req: Request) {
       ok: true,
       assigned,
       results,
-      diagnostics: { totalSlots, unassignedSlots, draftGenerated, limit, platform: platform ?? null },
+      diagnostics: { totalSlots, unassignedSlots, draftGenerated, limit, platform: platform ?? null, minLeadMinutes },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
