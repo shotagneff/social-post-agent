@@ -120,6 +120,7 @@ export default function PostDraftsPage() {
 
   const [recentOnly, setRecentOnly] = useState(false);
   const [recentAfterIso, setRecentAfterIso] = useState<string>("");
+  const [recentBaselineIds, setRecentBaselineIds] = useState<string[]>([]);
 
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string>("");
@@ -301,6 +302,8 @@ export default function PostDraftsPage() {
     setWorking(true);
     setResult("");
 
+    setRecentBaselineIds(items.map((x) => x.id));
+
     const startedAt = Date.now();
     const safetyMs = 5 * 60 * 1000;
     setRecentAfterIso(new Date(startedAt - safetyMs).toISOString());
@@ -376,6 +379,12 @@ export default function PostDraftsPage() {
 
   const visibleItems = useMemo(() => {
     if (!recentOnly) return items;
+
+    const baseline = new Set(recentBaselineIds);
+    if (baseline.size > 0) {
+      return items.filter((it) => !baseline.has(it.id));
+    }
+
     const after = String(recentAfterIso ?? "").trim();
     if (!after) return items;
     const afterMs = new Date(after).getTime();
@@ -384,7 +393,7 @@ export default function PostDraftsPage() {
       const t = new Date(it.createdAt).getTime();
       return Number.isFinite(t) && t >= afterMs;
     });
-  }, [items, recentAfterIso, recentOnly]);
+  }, [items, recentAfterIso, recentBaselineIds, recentOnly]);
 
   const recentFilterNotice = useMemo(() => {
     if (!recentOnly) return "";
