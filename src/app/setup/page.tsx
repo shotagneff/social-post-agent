@@ -170,7 +170,7 @@ export default function SetupPage() {
         }
         return null;
       })
-      .filter((v): v is SourceAccount => Boolean(v));
+      .filter((v): v is SourceAccount => v !== null);
   }, [sourceAccountsText]);
 
   const [submitting, setSubmitting] = useState(false);
