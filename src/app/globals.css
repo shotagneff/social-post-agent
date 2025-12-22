@@ -20,7 +20,59 @@
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(99, 102, 241, 0.14), rgba(255, 255, 255, 0))
+      , radial-gradient(900px 520px at 80% 10%, rgba(16, 185, 129, 0.12), rgba(255, 255, 255, 0))
+      , var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a {
+    text-underline-offset: 4px;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(24, 24, 27, 0.6);
+    outline-offset: 2px;
+  }
+
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  .spa-surface {
+    @apply bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70;
+  }
+
+  .spa-card {
+    @apply spa-surface rounded-2xl border border-zinc-200/70 shadow-sm;
+  }
+
+  .spa-button {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition-colors;
+  }
+
+  .spa-button-primary {
+    @apply spa-button bg-zinc-900 text-white hover:bg-zinc-800;
+  }
+
+  .spa-button-secondary {
+    @apply spa-button border border-zinc-200 bg-white hover:bg-zinc-50;
+  }
 }
