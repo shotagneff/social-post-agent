@@ -494,26 +494,17 @@ export default function PostDraftsPage() {
   }, [detail, detailConfirming, detailIsDirty, detailSaving]);
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-6">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">大量生成（PostDraft）</h1>
-          <div className="flex items-center gap-3">
-            <Link href="/setup" className="text-sm underline">
-              セットアップ
-            </Link>
-            <Link href="/schedules" className="text-sm underline">
-              予約
-            </Link>
-            <Link href="/" className="text-sm underline">
-              ホーム
-            </Link>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">PostDraft</h1>
+        <Link href="/schedules" className="text-sm underline">
+          予約へ
+        </Link>
+      </div>
 
-        <Stepper steps={stepLabels} currentIndex={currentStepIndex} />
+      <Stepper steps={stepLabels} currentIndex={currentStepIndex} />
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm space-y-5">
+      <div className="spa-card p-6 space-y-5">
           <div className="text-sm font-semibold">2. 大量生成＆仮予約（まずはここ）</div>
           <div className="text-xs text-zinc-600">
             ボタンは基本これ1つです。「大量生成→仮予約」まで自動で行い、その後に内容を見て確定します。
@@ -601,7 +592,7 @@ export default function PostDraftsPage() {
 
           <div className="flex flex-col gap-2 md:flex-row">
             <button
-              className="rounded-xl bg-black px-4 py-2 text-sm text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+              className="spa-button-primary disabled:opacity-50"
               disabled={!canRun || working}
               onClick={createAndTentativelySchedule}
             >
@@ -609,41 +600,34 @@ export default function PostDraftsPage() {
             </button>
 
             <button
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-50"
+              className="spa-button-secondary disabled:opacity-50"
               disabled={!canRun || listLoading}
               onClick={reload}
             >
-              {listLoading ? "読込中..." : "一覧を更新"}
+              {listLoading ? "更新中..." : "一覧を更新"}
             </button>
           </div>
-
-          {result ? <div className="rounded-xl border bg-white p-3 text-sm">{result}</div> : null}
           {!canRun ? <div className="text-xs text-red-700">投稿先を選択してください。</div> : null}
-        </div>
+      </div>
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold">PostDraft一覧（最新100件）</div>
-              <div className="mt-1 text-xs text-zinc-600">
-                DRAFT_GENERATED: {generatedCount} 件 / TEMP_SCHEDULED: {tempCount} 件 / CONFIRMED: {confirmedCount} 件
-              </div>
-              {recentOnly ? (
-                <div className="mt-1 text-xs text-zinc-600">
-                  （表示中）DRAFT_GENERATED: {visibleGeneratedCount} 件 / TEMP_SCHEDULED: {visibleTempCount} 件 / CONFIRMED: {visibleConfirmedCount} 件
-                </div>
-              ) : null}
+      <div className="spa-card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold">PostDraft一覧（最新100件）</div>
+            <div className="mt-1 text-xs text-zinc-600">
+              全件: {items.length} / 表示中: {visibleItems.length}
             </div>
-            <label className="flex items-center gap-2 text-xs text-zinc-700">
-              <input
-                type="checkbox"
-                checked={recentOnly}
-                onChange={(e) => setRecentOnly(e.target.checked)}
-                disabled={!recentAfterIso.trim()}
-              />
-              直近の実行分のみ表示
-            </label>
           </div>
+          <label className="flex items-center gap-2 text-xs text-zinc-700">
+            <input
+              type="checkbox"
+              checked={recentOnly}
+              onChange={(e) => setRecentOnly(e.target.checked)}
+              disabled={!recentAfterIso.trim()}
+            />
+            直近の実行分のみ表示
+          </label>
+        </div>
 
           {recentFilterNotice ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -850,14 +834,14 @@ export default function PostDraftsPage() {
                       </div>
                       <div className="flex flex-col gap-2 md:flex-row">
                         <button
-                          className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm shadow-sm hover:bg-zinc-50 disabled:opacity-50"
+                          className="spa-button-secondary disabled:opacity-50"
                           disabled={detailSaving || detailConfirming}
                           onClick={saveDetail}
                         >
                           {detailSaving ? "保存中..." : "保存"}
                         </button>
                         <button
-                          className="rounded-xl bg-black px-4 py-2 text-sm text-white shadow-sm hover:bg-zinc-800 disabled:opacity-50"
+                          className="spa-button-primary disabled:opacity-50"
                           disabled={Boolean(confirmDisabledReason)}
                           onClick={confirmDetail}
                         >
@@ -871,7 +855,6 @@ export default function PostDraftsPage() {
             </div>
           </div>
         ) : null}
-      </div>
     </div>
   );
 }
