@@ -53,7 +53,7 @@ export default function DraftsPage() {
         <div className="rounded-lg border bg-white">
           <div className="grid grid-cols-12 gap-2 border-b p-3 text-xs font-medium text-zinc-600">
             <div className="col-span-4">テーマ</div>
-            <div className="col-span-4">ワークスペース</div>
+            <div className="col-span-4">投稿先</div>
             <div className="col-span-2">状態</div>
             <div className="col-span-2">作成日時</div>
           </div>

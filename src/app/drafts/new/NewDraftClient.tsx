@@ -18,7 +18,7 @@ type NewDraftStep = "workspace" | "theme" | "options" | "generate" | "done";
 function stepTitle(step: NewDraftStep) {
   switch (step) {
     case "workspace":
-      return "1. ワークスペース";
+      return "1. 投稿先";
     case "theme":
       return "2. テーマ";
     case "options":
@@ -75,7 +75,7 @@ export default function NewDraftClient() {
 
   const stepOrder: NewDraftStep[] = ["workspace", "theme", "options", "generate", "done"];
   const currentIndex = Math.max(0, stepOrder.indexOf(step));
-  const stepLabels = ["ワークスペース", "テーマ", "生成方法", "生成", "完了"];
+  const stepLabels = ["投稿先", "テーマ", "生成方法", "生成", "完了"];
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false);
@@ -161,7 +161,7 @@ export default function NewDraftClient() {
         </div>
 
         <div className="rounded-lg border bg-white p-4 text-sm text-zinc-700">
-          ワークスペースを選び、作りたい投稿のテーマを入力してください。生成後は下書き詳細で文章の調整→承認→予約へ進めます。
+          投稿先を選び、作りたい投稿のテーマを入力してください。生成後は下書き詳細で文章の調整→承認→予約へ進めます。
         </div>
 
         <div className="rounded-lg border bg-white p-4 text-sm">
@@ -174,7 +174,7 @@ export default function NewDraftClient() {
         <div className="rounded-lg border bg-white p-4 space-y-3">
           {step === "workspace" ? (
             <>
-              <div className="text-sm font-medium">ワークスペース</div>
+              <div className="text-sm font-medium">投稿先</div>
               <div className="space-y-1">
                 <select
                   className="w-full rounded border px-3 py-2 text-sm"
@@ -189,13 +189,13 @@ export default function NewDraftClient() {
                   ))}
                 </select>
                 {loadingWorkspaces ? (
-                  <div className="text-xs text-zinc-600">ワークスペース一覧を読み込み中...</div>
+                  <div className="text-xs text-zinc-600">投稿先一覧を読み込み中...</div>
                 ) : null}
                 {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
               </div>
 
               <label className="space-y-1 block">
-                <div className="text-sm font-medium">ワークスペースID（必要なら手入力）</div>
+                <div className="text-sm font-medium">投稿先ID（必要なら手入力）</div>
                 <input
                   className="w-full rounded border px-3 py-2 font-mono text-xs"
                   value={workspaceId}

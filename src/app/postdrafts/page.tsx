@@ -414,7 +414,7 @@ export default function PostDraftsPage() {
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <label className="space-y-2">
-              <div className="text-sm font-medium">ワークスペース</div>
+              <div className="text-sm font-medium">投稿先</div>
               <select
                 className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                 value={workspaceId}
@@ -436,7 +436,7 @@ export default function PostDraftsPage() {
                   </span>
                 ) : (
                   <span>
-                    まだワークスペースが無い場合は <Link className="underline" href="/setup">/setup</Link> で作成してください。
+                    まだ投稿先が無い場合は <Link className="underline" href="/setup">/setup</Link> で作成してください。
                   </span>
                 )}
               </div>
@@ -495,7 +495,7 @@ export default function PostDraftsPage() {
           </div>
 
           {result ? <div className="rounded-xl border bg-white p-3 text-sm">{result}</div> : null}
-          {!canRun ? <div className="text-xs text-red-700">ワークスペースを選択してください。</div> : null}
+          {!canRun ? <div className="text-xs text-red-700">投稿先を選択してください。</div> : null}
         </div>
 
         <div className="rounded-2xl border bg-white p-6 shadow-sm space-y-4">
