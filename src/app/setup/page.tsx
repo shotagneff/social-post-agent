@@ -172,6 +172,8 @@ export default function SetupPage() {
   const [result, setResult] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("");
 
+  const [autoAdvanced, setAutoAdvanced] = useState(false);
+
   const [step, setStep] = useState<SetupStep>("workspace");
 
   const [policyStartDate, setPolicyStartDate] = useState<string>(ymdToday());
@@ -251,6 +253,15 @@ export default function SetupPage() {
         if (initial) {
           setSelectedExistingWorkspaceId(initial);
           setUseExistingWorkspace(true);
+
+          if (!autoAdvanced) {
+            setWorkspaceId(initial);
+            setResult(`選択中: workspaceId=${initial}`);
+            setPolicyResult("");
+            setSlotResult("");
+            setStep("scheduling");
+            setAutoAdvanced(true);
+          }
         }
       })
       .catch((e) => {
@@ -274,6 +285,20 @@ export default function SetupPage() {
       window.localStorage.setItem("lastWorkspaceId", workspaceId.trim());
     }
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (autoAdvanced) return;
+    if (step !== "workspace") return;
+    if (!useExistingWorkspace) return;
+    const id = String(selectedExistingWorkspaceId ?? "").trim();
+    if (!id) return;
+    setWorkspaceId(id);
+    setResult(`選択中: workspaceId=${id}`);
+    setPolicyResult("");
+    setSlotResult("");
+    setStep("scheduling");
+    setAutoAdvanced(true);
+  }, [autoAdvanced, selectedExistingWorkspaceId, step, useExistingWorkspace]);
 
   async function submit() {
     setSubmitting(true);
@@ -691,6 +716,19 @@ export default function SetupPage() {
               <div className="text-xs text-zinc-600">
                 入力する場所は「必須」カードに集約しました。まずはそこで保存→Slots生成まで進めればOKです。
               </div>
+            </div>
+
+            <div className="flex items-center justify-end">
+              <button
+                className="rounded border px-3 py-1.5 text-xs"
+                onClick={() => {
+                  setUseExistingWorkspace(false);
+                  setStep("workspace");
+                  setAutoAdvanced(true);
+                }}
+              >
+                新しい投稿先を作る
+              </button>
             </div>
 
             <div className="rounded-xl border bg-zinc-50/60 p-3 text-sm">
