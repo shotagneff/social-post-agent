@@ -339,6 +339,11 @@ export default function PostDraftsPage() {
         return;
       }
 
+      const meta = json1?.meta as any;
+      const diag = meta?.used
+        ? `生成診断: persona=${meta.used.persona ? "OK" : "NG"} / genre=${meta.used.genre ? "OK" : "NG"} / sources=${meta.used.sources ? "OK" : "NG"}（active=${meta?.counts?.sourcesActive ?? 0}）`
+        : "";
+
       const res2 = await fetch("/api/scheduling/assign", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -366,7 +371,7 @@ export default function PostDraftsPage() {
       }
 
       setResult(
-        `作成しました: ${json1.created ?? 0} 件 / 仮予約: ${assigned} 件${testModeImmediate ? "（テストモード: 直近OK）" : ""}`,
+        `作成しました: ${json1.created ?? 0} 件 / 仮予約: ${assigned} 件${testModeImmediate ? "（テストモード: 直近OK）" : ""}${diag ? `\n${diag}` : ""}`,
       );
       await reload();
     } catch (e) {

@@ -99,6 +99,46 @@ export async function POST(req: Request) {
     const count = Math.max(1, Math.min(200, Number(body.count ?? 30) || 30));
     const theme = String(body.theme ?? "").trim() || "無題";
 
+    const [settings, sourcesCount] = await Promise.all([
+      prismaAny.workspaceSettings.findUnique({
+        where: { workspaceId },
+        select: { fixedPersonaId: true, defaultGenreId: true },
+      }),
+      prismaAny.sourceAccount.count({
+        where: { workspaceId, isActive: true },
+      }),
+    ]);
+
+    const personaId = String(settings?.fixedPersonaId ?? "").trim();
+    const genreId = String(settings?.defaultGenreId ?? "").trim();
+
+    const [persona, genre] = await Promise.all([
+      personaId
+        ? prismaAny.persona.findUnique({ where: { id: personaId }, select: { id: true } })
+        : Promise.resolve(null),
+      genreId
+        ? prismaAny.genre.findUnique({ where: { id: genreId }, select: { id: true } })
+        : Promise.resolve(null),
+    ]);
+
+    const meta = {
+      generator: "mock" as const,
+      used: {
+        persona: Boolean(personaId && persona),
+        genre: Boolean(genreId && genre),
+        sources: Number(sourcesCount ?? 0) > 0,
+      },
+      ids: {
+        personaId: personaId || null,
+        genreId: genreId || null,
+      },
+      counts: {
+        sourcesActive: Number(sourcesCount ?? 0) || 0,
+      },
+      note:
+        "現在の /api/postdrafts/batch はモック生成です（本文には persona/genre/sources をまだ反映していません）。次ステップでLLM生成に置換します。",
+    };
+
     const rows = Array.from({ length: count }).map((_, i) => ({
       workspaceId,
       platform: platform as any,
@@ -110,7 +150,7 @@ export async function POST(req: Request) {
       data: rows,
     });
 
-    return NextResponse.json({ ok: true, created: created.count, platform });
+    return NextResponse.json({ ok: true, created: created.count, platform, meta });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
