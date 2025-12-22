@@ -9,6 +9,8 @@ type Platform = "X" | "THREADS";
 type SourceAccount = {
   platform: Platform;
   handle: string;
+  weight?: number;
+  memo?: string;
 };
 
 type CoreTimeWindow = {
@@ -148,7 +150,7 @@ export default function SetupPage() {
   );
 
   const [sourceAccountsText, setSourceAccountsText] = useState(
-    "X,@example1\nX,@example2\nTHREADS,@example3",
+    "X,@example1,3,結論→理由→一言で締める\nX,@example2,1,箇条書き多めで短文テンポ\nTHREADS,@example3,2,問いかけで締める",
   );
 
   const sourceAccounts = useMemo<SourceAccount[]>(() => {
@@ -157,11 +159,14 @@ export default function SetupPage() {
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
-        const [platformRaw, handleRaw] = line.split(",");
+        const [platformRaw, handleRaw, weightRaw, ...memoParts] = line.split(",");
         const platform = (platformRaw ?? "").trim().toUpperCase();
         const handle = (handleRaw ?? "").trim();
+        const weightNum = Number(String(weightRaw ?? "").trim());
+        const weight = Number.isFinite(weightNum) ? weightNum : undefined;
+        const memo = memoParts.join(",").trim() || undefined;
         if ((platform === "X" || platform === "THREADS") && handle) {
-          return { platform: platform as Platform, handle };
+          return { platform: platform as Platform, handle, weight, memo };
         }
         return null;
       })
@@ -680,6 +685,13 @@ export default function SetupPage() {
             <div className="text-sm font-medium">参照アカウント</div>
             <div className="text-xs text-zinc-600">
               ここで指定したアカウントの投稿を、将来の学習/分析の入力として使う想定です（いまはテスト用）。
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-white p-3 text-xs text-zinc-700 space-y-1">
+              <div className="font-medium">入力形式（1行=1アカウント）</div>
+              <div className="font-mono">PLATFORM,handle,weight,memo</div>
+              <div className="text-zinc-600">memo は「書き分けたい癖」を短く書くと効きます。</div>
+              <div className="text-zinc-600">例: 『結論→理由→一言』『箇条書き多め』『短文テンポ』『問いかけで締める』</div>
+              <div className="text-zinc-600">weight は優先度（大きいほど参照されやすい）です。空でもOK。</div>
             </div>
             <textarea
               className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
