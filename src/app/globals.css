@@ -61,7 +61,7 @@ body {
   }
 
   .spa-card {
-    @apply spa-surface rounded-2xl border border-zinc-200/70 shadow-sm;
+    @apply bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 rounded-2xl border border-zinc-200/70 shadow-sm;
   }
 
   .spa-button {
@@ -69,10 +69,10 @@ body {
   }
 
   .spa-button-primary {
-    @apply spa-button bg-zinc-900 text-white hover:bg-zinc-800;
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition-colors bg-zinc-900 text-white hover:bg-zinc-800;
   }
 
   .spa-button-secondary {
-    @apply spa-button border border-zinc-200 bg-white hover:bg-zinc-50;
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition-colors border border-zinc-200 bg-white hover:bg-zinc-50;
   }
 }

@@ -263,25 +263,19 @@ export default function SchedulesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+    <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">予約一覧</h1>
-          <div className="flex gap-3 text-sm">
-            <Link className="underline" href="/drafts">
-              下書き
-            </Link>
-            <Link className="underline" href="/setup">
-              セットアップ
-            </Link>
-          </div>
+          <h1 className="text-2xl font-semibold">予約</h1>
+          <Link className="text-sm text-zinc-700 underline" href="/drafts">
+            下書きへ
+          </Link>
         </div>
 
-        <div className="rounded-lg border bg-white p-4 text-sm text-zinc-700">
+        <div className="spa-card p-4 text-sm text-zinc-700">
           下書きから作成した予約を一覧で確認できます。「予約を処理」を押すと、期限が過ぎた予約を投稿済みに進めます（いまはダミー投稿です）。
         </div>
 
-        <div className="rounded-lg border bg-white p-4 text-sm">
+        <div className="spa-card p-4 text-sm">
           <div className="font-medium">{cronModeText}</div>
           {cronSecretConfigured ? (
             <div className="mt-1 text-xs text-zinc-600">
@@ -296,12 +290,12 @@ export default function SchedulesPage() {
           ) : null}
         </div>
 
-        <div className="rounded-lg border bg-white p-4 text-sm">
+        <div className="spa-card p-4 text-sm">
           <div className="font-medium">いまのステップ: 予約を処理する</div>
           <div className="mt-1 text-xs text-zinc-600">処理対象（waiting かつ 予約日時が過去）: {dueCount} 件</div>
         </div>
 
-        <div className="rounded-lg border bg-white p-4">
+        <div className="spa-card p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="text-sm font-medium">いまの状態（サマリー）</div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600">
@@ -339,45 +333,45 @@ export default function SchedulesPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {!cronSecretConfigured ? (
             <button
-              className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+              className="spa-button-primary disabled:opacity-50"
               disabled={ticking || dueCount === 0}
               onClick={runTick}
             >
               {ticking ? "実行中..." : "予約を処理"}
             </button>
           ) : (
-            <button className="rounded bg-black px-4 py-2 text-sm text-white opacity-40" disabled>
+            <button className="spa-button-primary opacity-40" disabled>
               Cronで自動処理（手動無効）
             </button>
           )}
           {tickResult ? <div className="text-sm">{tickResult}</div> : null}
           {cancelResult ? <div className="text-sm">{cancelResult}</div> : null}
           {clearFailedResult ? <div className="text-sm">{clearFailedResult}</div> : null}
-          <button className="rounded border px-3 py-2 text-sm" disabled={loading} onClick={load}>
+          <button className="spa-button-secondary" disabled={loading} onClick={load}>
             再読み込み
           </button>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border bg-white p-4 text-sm">
+        <div className="spa-card flex items-center justify-between p-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="font-medium">表示</div>
             <button
-              className={`rounded border px-3 py-1 text-sm ${statusFilter === "due" ? "bg-black text-white" : ""}`}
+              className={`rounded-xl border px-3 py-1 text-sm ${statusFilter === "due" ? "bg-zinc-900 text-white" : "bg-white"}`}
               onClick={() => setStatusFilter("due")}
             >
               処理対象（due）
             </button>
             <button
-              className={`rounded border px-3 py-1 text-sm ${statusFilter === "active" ? "bg-black text-white" : ""}`}
+              className={`rounded-xl border px-3 py-1 text-sm ${statusFilter === "active" ? "bg-zinc-900 text-white" : "bg-white"}`}
               onClick={() => setStatusFilter("active")}
             >
               稼働中（waiting/posting）
             </button>
             <button
-              className={`rounded border px-3 py-1 text-sm ${statusFilter === "all" ? "bg-black text-white" : ""}`}
+              className={`rounded-xl border px-3 py-1 text-sm ${statusFilter === "all" ? "bg-zinc-900 text-white" : "bg-white"}`}
               onClick={() => setStatusFilter("all")}
             >
               すべて
@@ -387,7 +381,7 @@ export default function SchedulesPage() {
           <div className="flex items-center gap-2">
             <div className="text-xs text-zinc-600">failed: {failedCount} 件</div>
             <button
-              className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+              className="spa-button-secondary disabled:opacity-50"
               disabled={clearingFailed || failedCount === 0}
               onClick={clearFailedSchedules}
             >
@@ -399,7 +393,7 @@ export default function SchedulesPage() {
         {loading ? <div className="text-sm text-zinc-600">読み込み中...</div> : null}
         {error ? <div className="rounded border bg-white p-3 text-sm">{error}</div> : null}
 
-        <div className="rounded-lg border bg-white">
+        <div className="spa-card overflow-hidden">
           <div className="grid grid-cols-12 gap-2 border-b p-3 text-xs font-medium text-zinc-600">
             <div className="col-span-4">テーマ</div>
             <div className="col-span-2">投稿先</div>
