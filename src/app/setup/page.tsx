@@ -172,8 +172,6 @@ export default function SetupPage() {
   const [result, setResult] = useState<string>("");
   const [workspaceId, setWorkspaceId] = useState<string>("");
 
-  const [autoAdvanced, setAutoAdvanced] = useState(false);
-
   const [step, setStep] = useState<SetupStep>("workspace");
 
   const [policyStartDate, setPolicyStartDate] = useState<string>(ymdToday());
@@ -254,14 +252,11 @@ export default function SetupPage() {
           setSelectedExistingWorkspaceId(initial);
           setUseExistingWorkspace(true);
 
-          if (!autoAdvanced) {
-            setWorkspaceId(initial);
-            setResult(`選択中: workspaceId=${initial}`);
-            setPolicyResult("");
-            setSlotResult("");
-            setStep("scheduling");
-            setAutoAdvanced(true);
-          }
+          // Keep a sensible default selection, but don't force-jump the user to step 6.
+          setWorkspaceId(initial);
+          setResult(`選択中: workspaceId=${initial}`);
+          setPolicyResult("");
+          setSlotResult("");
         }
       })
       .catch((e) => {
@@ -287,7 +282,6 @@ export default function SetupPage() {
   }, [workspaceId]);
 
   useEffect(() => {
-    if (autoAdvanced) return;
     if (step !== "workspace") return;
     if (!useExistingWorkspace) return;
     const id = String(selectedExistingWorkspaceId ?? "").trim();
@@ -296,9 +290,7 @@ export default function SetupPage() {
     setResult(`選択中: workspaceId=${id}`);
     setPolicyResult("");
     setSlotResult("");
-    setStep("scheduling");
-    setAutoAdvanced(true);
-  }, [autoAdvanced, selectedExistingWorkspaceId, step, useExistingWorkspace]);
+  }, [selectedExistingWorkspaceId, step, useExistingWorkspace]);
 
   async function submit() {
     setSubmitting(true);
@@ -480,6 +472,17 @@ export default function SetupPage() {
             <div className="text-sm font-medium">投稿先</div>
             {workspacesLoading ? <div className="text-xs text-zinc-600">読み込み中...</div> : null}
             {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
+
+            {workspaceId.trim() ? (
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between rounded-xl border border-zinc-200 bg-white p-3">
+                <div className="text-xs text-zinc-700">
+                  選択中: <span className="font-mono">{workspaceId}</span>
+                </div>
+                <button className="spa-button-secondary" onClick={() => setStep("scheduling")}>
+                  投稿枠（ステップ6）へ
+                </button>
+              </div>
+            ) : null}
 
             {workspaces.length > 0 ? (
               <div className="space-y-2">
