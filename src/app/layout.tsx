@@ -39,7 +39,7 @@ export default function RootLayout({
               </div>
 
               <nav className="flex items-center gap-3 text-sm">
-                <a className="rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100" href="/setup">
+                <a className="rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100" href="/setup?step=workspace">
                   セットアップ
                 </a>
                 <a className="rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100" href="/threads/connect">

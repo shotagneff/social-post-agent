@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type Platform = "X" | "THREADS";
@@ -105,6 +105,7 @@ function addDaysYmd(ymd: string, days: number) {
 
 export default function SetupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [workspaceName, setWorkspaceName] = useState("マイ投稿先");
   const [timezone, setTimezone] = useState("Asia/Tokyo");
   const [postingTargets, setPostingTargets] = useState<Platform[]>(["X"]);
@@ -229,6 +230,15 @@ export default function SetupPage() {
     "確認",
     "投稿枠",
   ];
+
+  useEffect(() => {
+    const forced = String(searchParams.get("step") ?? "").trim();
+    if (!forced) return;
+    if (forced === "workspace" || forced === "persona" || forced === "genre" || forced === "sources" || forced === "confirm" || forced === "scheduling") {
+      setStep(forced);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     let canceled = false;
