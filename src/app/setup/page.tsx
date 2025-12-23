@@ -83,17 +83,14 @@ function stepTitle(step: SetupStep) {
 }
 
 type NarratorPoliteness = "casual" | "polite";
-type NarratorEmojiLevel = "none" | "low" | "medium";
-type NarratorTempo = "slow" | "normal" | "fast";
-type NarratorEnding = "question" | "cta" | "statement";
+type NarratorGender = "unspecified" | "female" | "male" | "other";
 
 type NarratorProfile = {
-  firstPerson: string;
-  politeness: NarratorPoliteness;
-  emojiLevel: NarratorEmojiLevel;
-  tempo: NarratorTempo;
-  ending: NarratorEnding;
-  maxEmojisPerPost: number;
+  roleOrPosition: string;
+  gender: NarratorGender;
+  personality: string;
+  background: string;
+  notes: string;
   version: 1;
 };
 
@@ -223,25 +220,22 @@ export default function SetupPage() {
     ),
   );
 
-  const [narratorFirstPerson, setNarratorFirstPerson] = useState<string>("私");
-  const [narratorPoliteness, setNarratorPoliteness] = useState<NarratorPoliteness>("polite");
-  const [narratorEmojiLevel, setNarratorEmojiLevel] = useState<NarratorEmojiLevel>("low");
-  const [narratorTempo, setNarratorTempo] = useState<NarratorTempo>("normal");
-  const [narratorEnding, setNarratorEnding] = useState<NarratorEnding>("question");
+  const [narratorRoleOrPosition, setNarratorRoleOrPosition] = useState<string>("");
+  const [narratorGender, setNarratorGender] = useState<NarratorGender>("unspecified");
+  const [narratorPersonality, setNarratorPersonality] = useState<string>("");
+  const [narratorBackground, setNarratorBackground] = useState<string>("");
+  const [narratorNotes, setNarratorNotes] = useState<string>("");
 
   const narratorProfile: NarratorProfile = useMemo(() => {
-    const fp = String(narratorFirstPerson ?? "").trim() || "私";
-    const maxEmojisPerPost = narratorEmojiLevel === "none" ? 0 : narratorEmojiLevel === "low" ? 1 : 3;
     return {
-      firstPerson: fp,
-      politeness: narratorPoliteness,
-      emojiLevel: narratorEmojiLevel,
-      tempo: narratorTempo,
-      ending: narratorEnding,
-      maxEmojisPerPost,
+      roleOrPosition: String(narratorRoleOrPosition ?? "").trim(),
+      gender: narratorGender,
+      personality: String(narratorPersonality ?? "").trim(),
+      background: String(narratorBackground ?? "").trim(),
+      notes: String(narratorNotes ?? "").trim(),
       version: 1,
     };
-  }, [narratorEmojiLevel, narratorEnding, narratorFirstPerson, narratorPoliteness, narratorTempo]);
+  }, [narratorBackground, narratorGender, narratorNotes, narratorPersonality, narratorRoleOrPosition]);
 
   const narratorProfileJson = useMemo(() => JSON.stringify(narratorProfile), [narratorProfile]);
 
@@ -303,8 +297,19 @@ export default function SetupPage() {
   const genreJsonValid = true;
 
   const canGoNextWorkspace = Boolean(workspaceName.trim() && timezone.trim());
-  const canGoNextPersona = personaJsonValid;
-  const canGoNextNarrator = Boolean(String(narratorFirstPerson ?? "").trim());
+  const canGoNextPersona = useMemo(() => {
+    try {
+      const parsed = JSON.parse(personaJson);
+      return typeof parsed === "object" && parsed !== null;
+    } catch {
+      return false;
+    }
+  }, [personaJson]);
+  const canGoNextNarrator = useMemo(() => {
+    const hasRole = String(narratorRoleOrPosition ?? "").trim().length > 0;
+    const hasNotes = String(narratorNotes ?? "").trim().length > 0;
+    return hasRole || hasNotes;
+  }, [narratorNotes, narratorRoleOrPosition]);
   const canGoNextGenre = Boolean(genreKey.trim() && genreJsonValid);
   const canGoNextSources = sourceAccounts.length > 0;
   const canRun = canGoNextWorkspace && canGoNextPersona && canGoNextNarrator && canGoNextGenre && canGoNextSources;
@@ -740,74 +745,71 @@ export default function SetupPage() {
 
         {step === "narrator" ? (
           <div className="spa-card p-6 space-y-4">
-            <div className="text-sm font-medium">語り手（フォーム）</div>
+            <div className="text-sm font-medium">発信者プロフィール</div>
             <div className="text-xs text-zinc-600">
-              一人称や語尾などの「話し方」を固定します。
+              「どういう立場の人が、どんな人間として発信しているか」を設定します。
+              話し方（語尾・締め方）は投稿ごとに変えて良い前提です。
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="space-y-1">
-                <div className="text-sm font-medium">一人称</div>
+                <div className="text-sm font-medium">立場（職種/役割など）</div>
                 <input
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                  value={narratorFirstPerson}
-                  onChange={(e) => setNarratorFirstPerson(e.target.value)}
+                  placeholder="例: 起業家 / エンジニア / 経営企画 / 個人開発者"
+                  value={narratorRoleOrPosition}
+                  onChange={(e) => setNarratorRoleOrPosition(e.target.value)}
                 />
               </label>
 
               <label className="space-y-1">
-                <div className="text-sm font-medium">敬語</div>
+                <div className="text-sm font-medium">性別</div>
                 <select
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                  value={narratorPoliteness}
-                  onChange={(e) => setNarratorPoliteness(e.target.value as NarratorPoliteness)}
+                  value={narratorGender}
+                  onChange={(e) => setNarratorGender(e.target.value as NarratorGender)}
                 >
-                  <option value="polite">丁寧（です・ます）</option>
-                  <option value="casual">カジュアル（だ・する）</option>
-                </select>
-              </label>
-
-              <label className="space-y-1">
-                <div className="text-sm font-medium">絵文字</div>
-                <select
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                  value={narratorEmojiLevel}
-                  onChange={(e) => setNarratorEmojiLevel(e.target.value as NarratorEmojiLevel)}
-                >
-                  <option value="none">なし</option>
-                  <option value="low">少なめ</option>
-                  <option value="medium">普通</option>
-                </select>
-              </label>
-
-              <label className="space-y-1">
-                <div className="text-sm font-medium">テンポ</div>
-                <select
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                  value={narratorTempo}
-                  onChange={(e) => setNarratorTempo(e.target.value as NarratorTempo)}
-                >
-                  <option value="slow">ゆっくり（説明多め）</option>
-                  <option value="normal">標準</option>
-                  <option value="fast">速い（短文テンポ）</option>
+                  <option value="unspecified">指定しない</option>
+                  <option value="female">女性</option>
+                  <option value="male">男性</option>
+                  <option value="other">その他</option>
                 </select>
               </label>
 
               <label className="space-y-1 md:col-span-2">
-                <div className="text-sm font-medium">締め方</div>
-                <select
+                <div className="text-sm font-medium">人柄（性格/価値観）</div>
+                <input
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                  value={narratorEnding}
-                  onChange={(e) => setNarratorEnding(e.target.value as NarratorEnding)}
-                >
-                  <option value="question">問いかけで締める</option>
-                  <option value="cta">行動提案で締める</option>
-                  <option value="statement">言い切りで締める</option>
-                </select>
+                  placeholder="例: 誠実 / 実務派 / 率直 / 穏やか / 論理重視"
+                  value={narratorPersonality}
+                  onChange={(e) => setNarratorPersonality(e.target.value)}
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2">
+                <div className="text-sm font-medium">背景（経歴/専門など）</div>
+                <textarea
+                  className="w-full min-h-[88px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  placeholder="例: SaaSの開発を10年。PMも経験。個人でプロダクトも運用している。"
+                  value={narratorBackground}
+                  onChange={(e) => setNarratorBackground(e.target.value)}
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2">
+                <div className="text-sm font-medium">自由文（補足）</div>
+                <textarea
+                  className="w-full min-h-[110px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  placeholder="例: 読者は同業の実務者。煽りはしない。根拠のない断定は避ける。"
+                  value={narratorNotes}
+                  onChange={(e) => setNarratorNotes(e.target.value)}
+                />
               </label>
             </div>
 
-            {!canGoNextNarrator ? <div className="text-xs text-red-700">一人称は必須です。</div> : null}
+            {!canGoNextNarrator ? (
+              <div className="text-xs text-red-700">立場か自由文のどちらかは入力してください。</div>
+            ) : null}
 
             <div className="flex items-center justify-between gap-2">
               <button className="spa-button-secondary" onClick={() => setStep("persona")}>
@@ -1014,7 +1016,8 @@ export default function SetupPage() {
               <div className="font-medium">{postingTargets.join(", ")}</div>
               <div className="mt-2 text-xs text-zinc-600">語り手</div>
               <div className="font-medium">
-                {narratorProfile.firstPerson} / {narratorProfile.politeness} / {narratorProfile.emojiLevel} / {narratorProfile.tempo} / {narratorProfile.ending}
+                {narratorProfile.roleOrPosition || "(未入力)"}
+                {narratorProfile.gender !== "unspecified" ? ` / ${narratorProfile.gender}` : ""}
               </div>
               <div className="mt-2 text-xs text-zinc-600">フォーマットキー</div>
               <div className="font-medium">{genreKey}</div>
