@@ -903,13 +903,19 @@ export default function PostDraftsPage() {
                         <div>
                           <div className="text-sm font-medium">スレッド返信（任意 / 最大4つ）</div>
                           <div className="mt-1 text-xs text-zinc-600">
-                            保存すると、本文→返信1→返信2→返信3→返信4 の順で返信チェーンとして投稿されます。
+                            保存すると、本文→返信1→返信2→返信3→返信4 の順で返信チェーンとして投稿されます。空欄の返信は無視されます。
                           </div>
+                          <div className="mt-1 text-xs text-zinc-600">目安: 各返信は 900 文字以内</div>
                         </div>
 
                         {detailThreadReplies.map((val, idx) => (
                           <label key={`thread-reply-${idx}`} className="space-y-2 block">
-                            <div className="text-xs font-medium text-zinc-700">返信 {idx + 1}</div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-xs font-medium text-zinc-700">返信 {idx + 1}</div>
+                              <div className={String(val ?? "").length > 900 ? "text-xs text-red-700" : "text-xs text-zinc-500"}>
+                                {String(val ?? "").length}/900
+                              </div>
+                            </div>
                             <textarea
                               className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                               rows={4}
@@ -920,6 +926,9 @@ export default function PostDraftsPage() {
                                 setDetailThreadReplies(next);
                               }}
                             />
+                            {String(val ?? "").length > 900 ? (
+                              <div className="text-xs text-red-700">900文字を超えています（投稿に失敗する可能性があります）。</div>
+                            ) : null}
                           </label>
                         ))}
                       </div>
