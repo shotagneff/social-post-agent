@@ -21,7 +21,7 @@ async function postForm(url: string, form: Record<string, string>) {
   });
 
   const text = await res.text().catch(() => "");
-  let json: any = null;
+  let json: unknown = null;
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
@@ -86,10 +86,11 @@ export async function publishToThreadsText(args: {
       access_token: accessToken,
     });
 
+    const createdJson = created.json as { id?: unknown; error?: { message?: unknown } } | null;
     if (!created.res.ok) {
       const retryable = created.res.status >= 500;
       const errMsg =
-        (created.json?.error?.message as string | undefined) ??
+        (typeof createdJson?.error?.message === "string" ? createdJson.error.message : undefined) ??
         `${created.res.status} ${created.text || "Threads create failed"}`;
       return {
         ok: false,
@@ -99,7 +100,7 @@ export async function publishToThreadsText(args: {
       };
     }
 
-    const creationId = String(created.json?.id ?? "").trim();
+    const creationId = String(createdJson?.id ?? "").trim();
     if (!creationId) {
       return { ok: false, error: "Threads create returned no id", retryable: false, raw: created.json };
     }
@@ -116,7 +117,12 @@ export async function publishToThreadsText(args: {
     for (let attempt = 1; attempt <= 3; attempt++) {
       if (published.res.ok) break;
 
-      const msg = String(published.json?.error?.message ?? published.text ?? "").toLowerCase();
+      const publishedJson = published.json as { id?: unknown; error?: { message?: unknown } } | null;
+      const msg = String(
+        (typeof publishedJson?.error?.message === "string" ? publishedJson.error.message : undefined) ??
+          published.text ??
+          ""
+      ).toLowerCase();
       const isResourceMissing = msg.includes("requested resource does not exist") || msg.includes("resource does not exist");
       if (!isResourceMissing) break;
 
@@ -130,8 +136,9 @@ export async function publishToThreadsText(args: {
 
     if (!published.res.ok) {
       const retryable = published.res.status >= 500;
+      const publishedJson = published.json as { id?: unknown; error?: { message?: unknown } } | null;
       const errMsg =
-        (published.json?.error?.message as string | undefined) ??
+        (typeof publishedJson?.error?.message === "string" ? publishedJson.error.message : undefined) ??
         `${published.res.status} ${published.text || "Threads publish failed"}`;
       return {
         ok: false,
@@ -150,7 +157,8 @@ export async function publishToThreadsText(args: {
       };
     }
 
-    const externalPostId = String(published.json?.id ?? "").trim();
+    const publishedJson = published.json as { id?: unknown; error?: { message?: unknown } } | null;
+    const externalPostId = String(publishedJson?.id ?? "").trim();
     if (!externalPostId) {
       return {
         ok: false,
@@ -192,6 +200,7 @@ export async function publishToThreadsThread(args: {
   if (!main.ok) return main;
 
   let parentId = main.externalPostId;
+  const postedReplyIds: string[] = [];
   const replies = (Array.isArray(args.replies) ? args.replies : [])
     .map((x) => String(x ?? "").trim())
     .filter(Boolean)
@@ -209,13 +218,34 @@ export async function publishToThreadsThread(args: {
       return {
         ok: false,
         error: `Threads reply error (index=${i + 1}): ${res.error}`,
-        retryable: res.retryable,
-        raw: res.raw,
+        retryable: false,
+        raw: {
+          mode: "threads",
+          step: "reply",
+          mainExternalPostId: main.externalPostId,
+          postedReplyIds,
+          failedAtIndex: i,
+          failedTextLen: String(r ?? "").length,
+          cause: res.raw ?? res.error,
+        },
       };
     }
     parentId = res.externalPostId;
+    postedReplyIds.push(res.externalPostId);
     await sleep(250);
   }
 
-  return main;
+  return {
+    ok: true,
+    externalPostId: main.externalPostId,
+    raw: {
+      ...((typeof main.raw === "object" && main.raw !== null
+        ? (main.raw as Record<string, unknown>)
+        : { mainRaw: main.raw }) as Record<string, unknown>),
+      thread: {
+        mainExternalPostId: main.externalPostId,
+        replyExternalPostIds: postedReplyIds,
+      },
+    },
+  };
 }
