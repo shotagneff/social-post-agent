@@ -13,6 +13,32 @@ type SourceAccount = {
   memo?: string;
 };
 
+function normalizeHandle(input: string) {
+  const raw = String(input ?? "").trim();
+  if (!raw) return "";
+  return raw.startsWith("@") ? raw : `@${raw}`;
+}
+
+function validateHandle(platform: Platform, handle: string) {
+  const h = normalizeHandle(handle);
+  if (!h) return "handle は必須です";
+
+  const body = h.slice(1);
+  if (!body) return "handle は必須です";
+
+  if (platform === "X") {
+    if (!/^[A-Za-z0-9_]{1,15}$/.test(body)) {
+      return "Xのhandleは英数字と_のみ（1〜15文字）です";
+    }
+    return "";
+  }
+
+  if (!/^[A-Za-z0-9._]{1,30}$/.test(body)) {
+    return "Threadsのhandleは英数字と._のみ（1〜30文字）です";
+  }
+  return "";
+}
+
 type CoreTimeWindow = {
   daysOfWeek: number[];
   startTime: string;
@@ -155,15 +181,21 @@ export default function SetupPage() {
     { platform: "THREADS", handle: "@example3", weight: 2, memo: "問いかけで締める" },
   ]);
 
+  const sourceAccountRowErrors = useMemo(() => {
+    return (Array.isArray(sourceAccountRows) ? sourceAccountRows : []).map((r) =>
+      validateHandle(r.platform, r.handle),
+    );
+  }, [sourceAccountRows]);
+
   const sourceAccounts = useMemo<SourceAccount[]>(() => {
     return (Array.isArray(sourceAccountRows) ? sourceAccountRows : [])
       .map((r) => ({
         platform: r.platform,
-        handle: String(r.handle ?? "").trim(),
+        handle: normalizeHandle(String(r.handle ?? "")),
         weight: typeof r.weight === "number" && Number.isFinite(r.weight) ? r.weight : undefined,
         memo: r.memo ? String(r.memo).trim() : undefined,
       }))
-      .filter((r) => (r.platform === "X" || r.platform === "THREADS") && r.handle);
+      .filter((r) => (r.platform === "X" || r.platform === "THREADS") && !validateHandle(r.platform, r.handle));
   }, [sourceAccountRows]);
 
   const [submitting, setSubmitting] = useState(false);
@@ -719,6 +751,11 @@ export default function SetupPage() {
                         prev.map((p, i) => (i === idx ? { ...p, handle: v } : p)),
                       );
                     }}
+                    onBlur={() => {
+                      setSourceAccountRows((prev) =>
+                        prev.map((p, i) => (i === idx ? { ...p, handle: normalizeHandle(p.handle) } : p)),
+                      );
+                    }}
                   />
                   <input
                     className="col-span-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
@@ -756,6 +793,15 @@ export default function SetupPage() {
                   </button>
                 </div>
               ))}
+              {sourceAccountRowErrors.some(Boolean) ? (
+                <div className="text-xs text-red-700">
+                  {sourceAccountRowErrors
+                    .map((m, i) => (m ? `行${i + 1}: ${m}` : ""))
+                    .filter(Boolean)
+                    .slice(0, 5)
+                    .join(" / ")}
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xs text-zinc-600">解析結果: {sourceAccounts.length} 件</div>
                 <button

@@ -30,6 +30,21 @@ function parseJsonOrThrow(value: string, fieldName: string) {
   }
 }
 
+function normalizeHandle(input: string) {
+  const raw = String(input ?? "").trim();
+  if (!raw) return "";
+  return raw.startsWith("@") ? raw : `@${raw}`;
+}
+
+function isValidHandle(platform: Platform, handle: string) {
+  const h = normalizeHandle(handle);
+  if (!h) return false;
+  const body = h.slice(1);
+  if (!body) return false;
+  if (platform === "X") return /^[A-Za-z0-9_]{1,15}$/.test(body);
+  return /^[A-Za-z0-9._]{1,30}$/.test(body);
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as SetupBody;
@@ -60,13 +75,13 @@ export async function POST(req: Request) {
     const sourceAccounts = sourceAccountsInput
       .map((s) => ({
         platform: s.platform,
-        handle: String(s.handle ?? "").trim(),
+        handle: normalizeHandle(String(s.handle ?? "")),
         displayName: s.displayName ? String(s.displayName) : undefined,
         isActive: s.isActive ?? true,
         memo: s.memo ? String(s.memo) : undefined,
         weight: typeof s.weight === "number" ? s.weight : undefined,
       }))
-      .filter((s) => (s.platform === "X" || s.platform === "THREADS") && s.handle);
+      .filter((s) => (s.platform === "X" || s.platform === "THREADS") && isValidHandle(s.platform, s.handle));
 
     const workspace = await prisma.workspace.create({
       data: {
