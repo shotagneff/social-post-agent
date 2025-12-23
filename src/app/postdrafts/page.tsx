@@ -826,7 +826,7 @@ export default function PostDraftsPage() {
             >
               <div className="flex items-start justify-between border-b p-4">
                 <div>
-                  <div className="text-sm font-semibold">PostDraft 詳細</div>
+                  <div className="text-sm font-semibold">PostDraft 詳細 (threadReplies-ui-v1)</div>
                   {detail ? (
                     <div className="mt-1 text-xs text-zinc-600">
                       {detail.platform} / {detail.status} / 仮予約: {fmt(detail.tempScheduledAt)}
