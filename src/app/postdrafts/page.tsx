@@ -84,6 +84,56 @@ function ConfirmedBadge(props: { confirmedAt: string | null }) {
   );
 }
 
+type AudienceProfile = {
+  who: string;
+  situation: string;
+  pain: string;
+  desired: string;
+  noGo: string;
+};
+
+type AudiencePreset = {
+  key: string;
+  label: string;
+  profile: AudienceProfile;
+};
+
+const AUDIENCE_PRESETS: AudiencePreset[] = [
+  {
+    key: "indie-dev-beginner",
+    label: "個人開発（初心者）",
+    profile: {
+      who: "個人開発を始めたばかりのエンジニア（初級）",
+      situation: "何を作るか迷って手が止まっている",
+      pain: "失敗が怖くて着手できない/時間がない",
+      desired: "今日やる1手が決まり、次の行動に移れる",
+      noGo: "煽り/根性論/断定/バズ狙い",
+    },
+  },
+  {
+    key: "biz-worker-mid",
+    label: "会社員（実務改善）",
+    profile: {
+      who: "忙しい会社員（中級）。業務改善に興味はあるが時間がない",
+      situation: "やるべきことが多く、優先順位が決められない",
+      pain: "成果が見えない/相談相手がいない/やり方が曖昧",
+      desired: "判断軸と最小アクションが手に入り、明日試せる",
+      noGo: "抽象論だけ/長文すぎ/説教っぽい",
+    },
+  },
+  {
+    key: "job-change",
+    label: "転職・キャリア（準備中）",
+    profile: {
+      who: "転職を考え始めた実務者（初〜中級）",
+      situation: "何を準備すべきか分からない/時間が限られている",
+      pain: "現状維持が怖い/自信がない/情報過多",
+      desired: "次の一歩（学習/職務経歴/面接対策）が具体化する",
+      noGo: "煽り/不安商法/根拠ない断定",
+    },
+  },
+];
+
 function clip(text: string, n: number) {
   const t = String(text ?? "");
   if (t.length <= n) return t;
@@ -131,6 +181,23 @@ export default function PostDraftsPage() {
   const [platform, setPlatform] = useState<Platform>("X");
   const [count, setCount] = useState<number>(30);
   const [theme, setTheme] = useState<string>("テーマ（仮）");
+
+  const [audiencePresetKey, setAudiencePresetKey] = useState<string>(AUDIENCE_PRESETS[0]?.key ?? "indie-dev-beginner");
+  const [audienceWho, setAudienceWho] = useState<string>(AUDIENCE_PRESETS[0]?.profile.who ?? "");
+  const [audienceSituation, setAudienceSituation] = useState<string>(AUDIENCE_PRESETS[0]?.profile.situation ?? "");
+  const [audiencePain, setAudiencePain] = useState<string>(AUDIENCE_PRESETS[0]?.profile.pain ?? "");
+  const [audienceDesired, setAudienceDesired] = useState<string>(AUDIENCE_PRESETS[0]?.profile.desired ?? "");
+  const [audienceNoGo, setAudienceNoGo] = useState<string>(AUDIENCE_PRESETS[0]?.profile.noGo ?? "");
+
+  const audienceProfile: AudienceProfile = useMemo(() => {
+    return {
+      who: String(audienceWho ?? "").trim(),
+      situation: String(audienceSituation ?? "").trim(),
+      pain: String(audiencePain ?? "").trim(),
+      desired: String(audienceDesired ?? "").trim(),
+      noGo: String(audienceNoGo ?? "").trim(),
+    };
+  }, [audienceDesired, audienceNoGo, audiencePain, audienceSituation, audienceWho]);
 
   const [testModeImmediate, setTestModeImmediate] = useState(false);
 
@@ -354,6 +421,7 @@ export default function PostDraftsPage() {
           platform,
           count,
           theme,
+          audience: audienceProfile,
         }),
       });
 
@@ -665,6 +733,90 @@ export default function PostDraftsPage() {
               onChange={(e) => setTheme(e.target.value)}
             />
           </label>
+
+          <div className="rounded-xl border border-zinc-200 bg-white p-3 space-y-3">
+            <div className="text-sm font-medium">ターゲット（audience）</div>
+            <div className="text-xs text-zinc-600">
+              ペルソナはケースで変わる前提なので、生成のたびに「今回の読者」を指定します（プリセット + 微調整）。
+            </div>
+
+            <label className="space-y-2">
+              <div className="text-xs text-zinc-700">プリセット</div>
+              <select
+                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                value={audiencePresetKey}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  setAudiencePresetKey(key);
+                  const preset = AUDIENCE_PRESETS.find((p) => p.key === key) ?? AUDIENCE_PRESETS[0];
+                  setAudienceWho(preset?.profile.who ?? "");
+                  setAudienceSituation(preset?.profile.situation ?? "");
+                  setAudiencePain(preset?.profile.pain ?? "");
+                  setAudienceDesired(preset?.profile.desired ?? "");
+                  setAudienceNoGo(preset?.profile.noGo ?? "");
+                }}
+                disabled={working}
+              >
+                {AUDIENCE_PRESETS.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="space-y-1">
+                <div className="text-xs text-zinc-700">who</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={audienceWho}
+                  onChange={(e) => setAudienceWho(e.target.value)}
+                  disabled={working}
+                />
+              </label>
+
+              <label className="space-y-1">
+                <div className="text-xs text-zinc-700">desired</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={audienceDesired}
+                  onChange={(e) => setAudienceDesired(e.target.value)}
+                  disabled={working}
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2">
+                <div className="text-xs text-zinc-700">situation</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={audienceSituation}
+                  onChange={(e) => setAudienceSituation(e.target.value)}
+                  disabled={working}
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2">
+                <div className="text-xs text-zinc-700">pain</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={audiencePain}
+                  onChange={(e) => setAudiencePain(e.target.value)}
+                  disabled={working}
+                />
+              </label>
+
+              <label className="space-y-1 md:col-span-2">
+                <div className="text-xs text-zinc-700">no-go</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={audienceNoGo}
+                  onChange={(e) => setAudienceNoGo(e.target.value)}
+                  disabled={working}
+                />
+              </label>
+            </div>
+          </div>
 
           <div className="flex flex-col gap-2 md:flex-row">
             <button

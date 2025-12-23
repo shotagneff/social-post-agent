@@ -13,6 +13,7 @@ type Body = {
   count?: number;
   theme?: string;
   useOpenAI?: boolean;
+  audience?: unknown;
 };
 
 function extractJsonObject(text: string) {
@@ -35,6 +36,7 @@ async function generatePostsWithOpenAI(args: {
   personaProfile: unknown;
   narratorProfile: unknown;
   genreProfile: unknown;
+  audience: unknown;
   sources: Array<{ platform: Platform; handle: string; weight: number | null; memo: string | null }>;
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -62,6 +64,7 @@ async function generatePostsWithOpenAI(args: {
     persona: args.personaProfile,
     narrator: args.narratorProfile,
     genre: args.genreProfile,
+    audience: args.audience,
     sourceAccounts: sourceAccountsForPrompt,
     output: {
       posts:
@@ -80,6 +83,8 @@ async function generatePostsWithOpenAI(args: {
       "Treat narrator as the author profile (立場/性別/人物像/背景/価値観/制約) and keep it consistent across all posts.",
       "Do NOT explicitly state gender (e.g., '私は女性です'). If gender is provided, only let it subtly influence wording.",
       "Source memo is a style reference and MUST NOT override narrator constraints (e.g., no煽り, no根拠없는断定, etc.).",
+      "Optimize for the provided audience (who/situation/pain/desired/no-go). Make the post feel written for that reader.",
+      "Respect audience no-go. Avoid language, claims, or tone that violates it.",
       "Do NOT copy phrases, unique catchphrases, or structure verbatim from sources; only use them as inspiration for tone/angles/structure.",
       "Avoid mentioning the source account names in the post body.",
       "Optionally set styleApplied to a short Japanese note describing what style you applied (for debugging), without revealing the account name.",
@@ -149,6 +154,7 @@ async function reviewAndRewritePostsWithOpenAI(args: {
   personaProfile: unknown;
   narratorProfile: unknown;
   genreProfile: unknown;
+  audience: unknown;
   sources: Array<{ platform: Platform; handle: string; weight: number | null; memo: string | null }>;
   posts: Array<{ text: string; sourcesUsed: Array<{ platform: Platform; handle: string }> }>;
 }) {
@@ -176,6 +182,7 @@ async function reviewAndRewritePostsWithOpenAI(args: {
     persona: args.personaProfile,
     narrator: args.narratorProfile,
     genre: args.genreProfile,
+    audience: args.audience,
     sourceAccounts: sourceAccountsForPrompt,
     inputPosts: args.posts,
     output: {
@@ -192,6 +199,7 @@ async function reviewAndRewritePostsWithOpenAI(args: {
       "Keep narrator (author profile) consistent: role/position, personality, background, and constraints must not drift.",
       "Do NOT explicitly state gender (e.g., '私は女性です'). If gender is provided, only let it subtly influence wording.",
       "Source memo is a style reference and MUST NOT override narrator constraints.",
+      "Optimize for the provided audience and ensure the text feels appropriate for who/situation/pain/desired/no-go.",
       "Avoid copying from sources; remove any suspicious signature phrases.",
       "Do NOT mention source account names in the post body.",
       "If the post already looks good, set changed=false and keep meaning.",
@@ -350,6 +358,7 @@ export async function POST(req: Request) {
     const count = Math.max(1, Math.min(200, Number(body.count ?? 30) || 30));
     const theme = String(body.theme ?? "").trim() || "無題";
     const useOpenAI = body.useOpenAI === undefined ? true : Boolean(body.useOpenAI);
+    const audience = body.audience ?? {};
 
     const [settings, sourcesCount] = await Promise.all([
       prismaAny.workspaceSettings.findUnique({
@@ -395,6 +404,7 @@ export async function POST(req: Request) {
           personaProfile: persona?.profile ?? {},
           narratorProfile: settings?.narratorProfile ?? {},
           genreProfile: genre?.profile ?? {},
+          audience,
           sources: Array.isArray(sources) ? sources : [],
         });
 
@@ -406,6 +416,7 @@ export async function POST(req: Request) {
             personaProfile: persona?.profile ?? {},
             narratorProfile: settings?.narratorProfile ?? {},
             genreProfile: genre?.profile ?? {},
+            audience,
             sources: Array.isArray(sources) ? sources : [],
             posts: posts.map((p) => ({ text: p.text, sourcesUsed: p.sourcesUsed ?? [] })),
           });
