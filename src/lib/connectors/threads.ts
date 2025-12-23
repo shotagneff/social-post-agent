@@ -53,10 +53,12 @@ export async function publishToThreadsText(args: {
   text: string;
   accessToken: string;
   userId: string;
+  replyToId?: string;
 }): Promise<ThreadsPublishResult> {
   try {
     const accessToken = String(args.accessToken ?? "").trim();
     const userId = String(args.userId ?? "").trim();
+    const replyToId = String(args.replyToId ?? "").trim();
     const rawVersion = String(process.env.THREADS_API_VERSION ?? "v1.0").trim();
     const version = /^v\d+\.\d+$/.test(rawVersion) ? rawVersion : "v1.0";
 
@@ -80,6 +82,7 @@ export async function publishToThreadsText(args: {
     const created = await postForm(createUrl, {
       media_type: "TEXT",
       text: trimmed,
+      ...(replyToId ? { reply_to_id: replyToId } : {}),
       access_token: accessToken,
     });
 
@@ -173,4 +176,46 @@ export async function publishToThreadsText(args: {
     const retryable = msg.includes("fetch") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET");
     return { ok: false, error: msg, retryable };
   }
+}
+
+export async function publishToThreadsThread(args: {
+  text: string;
+  replies: string[];
+  accessToken: string;
+  userId: string;
+}): Promise<ThreadsPublishResult> {
+  const main = await publishToThreadsText({
+    text: args.text,
+    accessToken: args.accessToken,
+    userId: args.userId,
+  });
+  if (!main.ok) return main;
+
+  let parentId = main.externalPostId;
+  const replies = (Array.isArray(args.replies) ? args.replies : [])
+    .map((x) => String(x ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 4);
+
+  for (let i = 0; i < replies.length; i++) {
+    const r = replies[i];
+    const res = await publishToThreadsText({
+      text: r,
+      replyToId: parentId,
+      accessToken: args.accessToken,
+      userId: args.userId,
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: `Threads reply error (index=${i + 1}): ${res.error}`,
+        retryable: res.retryable,
+        raw: res.raw,
+      };
+    }
+    parentId = res.externalPostId;
+    await sleep(250);
+  }
+
+  return main;
 }

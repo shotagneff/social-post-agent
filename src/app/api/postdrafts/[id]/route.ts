@@ -7,6 +7,7 @@ const prismaAny = prisma as any;
 
 type PatchBody = {
   body?: string;
+  threadReplies?: unknown;
 };
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id?: string }> }) {
@@ -24,6 +25,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id?: string }>
         platform: true,
         status: true,
         body: true,
+        threadReplies: true,
         tempScheduledAt: true,
         confirmedAt: true,
         createdAt: true,
@@ -59,15 +61,29 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id?: string }
 
     const body = (await req.json().catch(() => ({}))) as PatchBody;
     const nextBody = body.body;
+    const nextThreadReplies = body.threadReplies;
 
     if (nextBody !== undefined && typeof nextBody !== "string") {
       return NextResponse.json({ ok: false, error: "body must be string" }, { status: 400 });
+    }
+
+    if (nextThreadReplies !== undefined) {
+      if (
+        !Array.isArray(nextThreadReplies) ||
+        nextThreadReplies.some((x) => typeof x !== "string")
+      ) {
+        return NextResponse.json(
+          { ok: false, error: "threadReplies must be string[]" },
+          { status: 400 },
+        );
+      }
     }
 
     const postDraft = await prismaAny.postDraft.update({
       where: { id },
       data: {
         ...(nextBody !== undefined ? { body: nextBody } : {}),
+        ...(nextThreadReplies !== undefined ? { threadReplies: nextThreadReplies } : {}),
       },
       select: {
         id: true,
@@ -75,6 +91,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id?: string }
         platform: true,
         status: true,
         body: true,
+        threadReplies: true,
         tempScheduledAt: true,
         confirmedAt: true,
         createdAt: true,

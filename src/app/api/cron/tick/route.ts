@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { publishToThreadsText } from "@/lib/connectors/threads";
+import { publishToThreadsText, publishToThreadsThread } from "@/lib/connectors/threads";
 
 export const runtime = "nodejs";
 
@@ -78,6 +78,7 @@ async function processOneSchedule(scheduleId: string) {
                 id: true,
                 workspaceId: true,
                 body: true,
+                threadReplies: true,
               },
             },
             draft: {
@@ -110,6 +111,12 @@ async function processOneSchedule(scheduleId: string) {
       const platform = claimed.platform;
 
       const textFromPostDraft = claimed.postDraft?.body ? String(claimed.postDraft.body) : "";
+      const repliesFromPostDraft = Array.isArray((claimed.postDraft as any)?.threadReplies)
+        ? (((claimed.postDraft as any).threadReplies as any[])
+            .map((x) => String(x ?? "").trim())
+            .filter(Boolean)
+            .slice(0, 4) as string[])
+        : [];
       const textFromDraft = (() => {
         const formatted = (claimed.draft?.formatted ?? {}) as any;
         const fromFormatted = String(formatted?.[platform]?.A ?? "");
@@ -147,11 +154,18 @@ async function processOneSchedule(scheduleId: string) {
 
       const published =
         platform === "THREADS"
-          ? await publishToThreadsText({
-              text,
-              accessToken: String(threadsCreds?.threadsAccessToken ?? ""),
-              userId: String(threadsCreds?.threadsUserId ?? ""),
-            })
+          ? repliesFromPostDraft.length > 0
+            ? await publishToThreadsThread({
+                text,
+                replies: repliesFromPostDraft,
+                accessToken: String(threadsCreds?.threadsAccessToken ?? ""),
+                userId: String(threadsCreds?.threadsUserId ?? ""),
+              })
+            : await publishToThreadsText({
+                text,
+                accessToken: String(threadsCreds?.threadsAccessToken ?? ""),
+                userId: String(threadsCreds?.threadsUserId ?? ""),
+              })
           : ({
               ok: false,
               error: "Xの投稿コネクタは未実装です（Threadsは設定すれば投稿できます）。",

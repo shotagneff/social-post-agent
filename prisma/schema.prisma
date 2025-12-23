@@ -181,6 +181,7 @@ model PostDraft {
   draftId     String?
   platform    Platform
   body        String
+  threadReplies Json?
   status      PostDraftStatus @default(DRAFT_GENERATED)
   tempScheduledAt DateTime?
   confirmedAt DateTime?
