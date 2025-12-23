@@ -898,6 +898,33 @@ export default function PostDraftsPage() {
                       />
                     </div>
 
+                    {detail.platform === "THREADS" ? (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-sm font-medium">スレッド返信（任意 / 最大4つ）</div>
+                          <div className="mt-1 text-xs text-zinc-600">
+                            保存すると、本文→返信1→返信2→返信3→返信4 の順で返信チェーンとして投稿されます。
+                          </div>
+                        </div>
+
+                        {detailThreadReplies.map((val, idx) => (
+                          <label key={`thread-reply-${idx}`} className="space-y-2 block">
+                            <div className="text-xs font-medium text-zinc-700">返信 {idx + 1}</div>
+                            <textarea
+                              className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                              rows={4}
+                              value={val}
+                              onChange={(e) => {
+                                const next = detailThreadReplies.slice();
+                                next[idx] = e.target.value;
+                                setDetailThreadReplies(next);
+                              }}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
+
                     {confirmDisabledReason ? (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
                         {confirmDisabledReason}
