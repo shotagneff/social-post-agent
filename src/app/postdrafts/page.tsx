@@ -838,7 +838,7 @@ export default function PostDraftsPage() {
                 </button>
               </div>
 
-              <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-4 space-y-4">
+              <div className="p-4 space-y-4" style={{ maxHeight: "calc(100vh - 8rem)", overflowY: "auto" }}>
                 {detailLoading ? <div className="text-sm text-zinc-600">読み込み中...</div> : null}
                 {detailError ? <div className="rounded-xl border bg-white p-3 text-sm">{detailError}</div> : null}
 
