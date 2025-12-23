@@ -34,6 +34,7 @@ type PostDraftDetail = {
   platform: Platform;
   status: string;
   body: string;
+  threadReplies?: unknown;
   tempScheduledAt: string | null;
   confirmedAt: string | null;
   createdAt: string;
@@ -151,6 +152,7 @@ export default function PostDraftsPage() {
   const [detailError, setDetailError] = useState<string>("");
   const [detail, setDetail] = useState<PostDraftDetail | null>(null);
   const [detailBody, setDetailBody] = useState<string>("");
+  const [detailThreadReplies, setDetailThreadReplies] = useState<string[]>(["", "", "", ""]);
   const [detailNotice, setDetailNotice] = useState<string>("");
 
   const canRun = Boolean(workspaceId.trim());
@@ -238,6 +240,7 @@ export default function PostDraftsPage() {
     setDetailNotice("");
     setDetail(null);
     setDetailBody("");
+    setDetailThreadReplies(["", "", "", ""]);
     try {
       const res = await fetch(`/api/postdrafts/${encodeURIComponent(id)}`, { cache: "no-store" });
       const json = (await res.json().catch(() => null)) as any;
@@ -248,6 +251,18 @@ export default function PostDraftsPage() {
       const pd = json.postDraft as PostDraftDetail;
       setDetail(pd);
       setDetailBody(String(pd.body ?? ""));
+
+      const repliesRaw = Array.isArray((pd as any)?.threadReplies) ? ((pd as any).threadReplies as any[]) : [];
+      const replies = repliesRaw
+        .map((x) => String(x ?? "").trim())
+        .filter(Boolean)
+        .slice(0, 4);
+      setDetailThreadReplies([
+        replies[0] ?? "",
+        replies[1] ?? "",
+        replies[2] ?? "",
+        replies[3] ?? "",
+      ]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";
       setDetailError(`エラー: ${msg}`);
@@ -264,7 +279,16 @@ export default function PostDraftsPage() {
       const res = await fetch(`/api/postdrafts/${encodeURIComponent(detail.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ body: detailBody }),
+        body: JSON.stringify({
+          body: detailBody,
+          threadReplies:
+            detail.platform === "THREADS"
+              ? detailThreadReplies
+                  .map((x) => String(x ?? "").trim())
+                  .filter(Boolean)
+                  .slice(0, 4)
+              : undefined,
+        }),
       });
       const json = (await res.json().catch(() => null)) as any;
       if (!json?.ok) {
@@ -519,8 +543,19 @@ export default function PostDraftsPage() {
 
   const detailIsDirty = useMemo(() => {
     if (!detail) return false;
-    return detailBody !== String(detail.body ?? "");
-  }, [detail, detailBody]);
+    const bodyDirty = detailBody !== String(detail.body ?? "");
+    const currentRepliesRaw = Array.isArray((detail as any)?.threadReplies) ? ((detail as any).threadReplies as any[]) : [];
+    const currentReplies = currentRepliesRaw
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    const uiReplies = detailThreadReplies
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    const repliesDirty = detail.platform === "THREADS" && JSON.stringify(currentReplies) !== JSON.stringify(uiReplies);
+    return bodyDirty || repliesDirty;
+  }, [detail, detailBody, detailThreadReplies]);
 
   const confirmDisabledReason = useMemo(() => {
     if (!detail) return "";
