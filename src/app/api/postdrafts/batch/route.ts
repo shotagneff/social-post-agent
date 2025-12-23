@@ -139,6 +139,122 @@ async function generatePostsWithOpenAI(args: {
   return out;
 }
 
+async function reviewAndRewritePostsWithOpenAI(args: {
+  platform: Platform;
+  personaProfile: unknown;
+  genreProfile: unknown;
+  sources: Array<{ platform: Platform; handle: string; weight: number | null; memo: string | null }>;
+  posts: Array<{ text: string; sourcesUsed: Array<{ platform: Platform; handle: string }> }>;
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is missing");
+  }
+
+  const maxLen = args.platform === "X" ? 260 : 900;
+  const sourceAccountsForPrompt = (Array.isArray(args.sources) ? args.sources : [])
+    .filter((s) => String(s?.handle ?? "").trim())
+    .map((s) => ({
+      platform: s.platform,
+      handle: String(s.handle).trim(),
+      weight: typeof s.weight === "number" ? s.weight : null,
+      memo: s.memo ? String(s.memo) : "",
+    }))
+    .sort((a, b) => (Number(b.weight ?? 0) || 0) - (Number(a.weight ?? 0) || 0))
+    .slice(0, 20);
+
+  const prompt = {
+    language: "ja",
+    platform: args.platform,
+    maxLen,
+    persona: args.personaProfile,
+    genre: args.genreProfile,
+    sourceAccounts: sourceAccountsForPrompt,
+    inputPosts: args.posts,
+    output: {
+      posts:
+        "{textFinal: string, changed: boolean, checks: {lengthOk: boolean, dupOk: boolean, toneOk: boolean, noCopyOk: boolean}, issues: string[], fixSummary: string}[] (same length as inputPosts)",
+      summary: "{changedCount: number}"
+    },
+    rules: [
+      "Return ONLY valid JSON.",
+      "Do not include markdown.",
+      "Keep each textFinal within maxLen characters.",
+      "Reduce duplication across posts: vary hook/structure/closing.",
+      "Keep persona tone and genre constraints.",
+      "Avoid copying from sources; remove any suspicious signature phrases.",
+      "Do NOT mention source account names in the post body.",
+      "If the post already looks good, set changed=false and keep meaning.",
+    ],
+  };
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You review and rewrite Japanese social media drafts to satisfy constraints. Output only valid JSON with the requested keys.",
+        },
+        { role: "user", content: JSON.stringify(prompt) },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`OpenAI review error: ${res.status} ${text}`);
+  }
+
+  const json = (await res.json().catch(() => null)) as any;
+  const content = String(json?.choices?.[0]?.message?.content ?? "");
+  const jsonText = extractJsonObject(content);
+  if (!jsonText) {
+    throw new Error("OpenAI reviewer returned non-JSON content");
+  }
+
+  const parsed = JSON.parse(jsonText) as any;
+  const posts = Array.isArray(parsed?.posts) ? (parsed.posts as any[]) : [];
+  const summary = parsed?.summary ?? null;
+
+  const out = posts
+    .map((p) => {
+      const textFinal = String(p?.textFinal ?? "").trim();
+      const changed = Boolean(p?.changed);
+      const checks = p?.checks ?? {};
+      const issues = Array.isArray(p?.issues) ? p.issues.map((x: any) => String(x ?? "").trim()).filter(Boolean) : [];
+      const fixSummary = String(p?.fixSummary ?? "").trim();
+      return {
+        textFinal,
+        changed,
+        checks: {
+          lengthOk: Boolean(checks?.lengthOk),
+          dupOk: Boolean(checks?.dupOk),
+          toneOk: Boolean(checks?.toneOk),
+          noCopyOk: Boolean(checks?.noCopyOk),
+        },
+        issues,
+        fixSummary,
+      };
+    })
+    .filter((p) => Boolean(p.textFinal));
+
+  if (out.length !== args.posts.length) {
+    throw new Error(`OpenAI review JSON invalid: posts.length=${out.length} (expected ${args.posts.length})`);
+  }
+
+  const changedCount = Number(summary?.changedCount ?? 0) || out.filter((p) => p.changed).length;
+  return { posts: out, changedCount };
+}
+
 function pick<T>(arr: T[], idx: number) {
   return arr[idx % arr.length];
 }
@@ -258,6 +374,7 @@ export async function POST(req: Request) {
     let bodies: string[] | null = null;
     let sourcesUsedSummary: Array<{ handle: string; count: number }> = [];
     let styleAppliedSummary: string[] = [];
+    let review: { changedCount: number; error: string | null } = { changedCount: 0, error: null };
 
     if (useOpenAI) {
       try {
@@ -271,6 +388,21 @@ export async function POST(req: Request) {
         });
 
         bodies = posts.map((p) => p.text);
+
+        try {
+          const reviewed = await reviewAndRewritePostsWithOpenAI({
+            platform,
+            personaProfile: persona?.profile ?? {},
+            genreProfile: genre?.profile ?? {},
+            sources: Array.isArray(sources) ? sources : [],
+            posts: posts.map((p) => ({ text: p.text, sourcesUsed: p.sourcesUsed ?? [] })),
+          });
+          const maxLen = platform === "X" ? 260 : 900;
+          bodies = reviewed.posts.map((p) => clampText(p.textFinal, maxLen));
+          review = { changedCount: reviewed.changedCount, error: null };
+        } catch (e) {
+          review = { changedCount: 0, error: e instanceof Error ? e.message : "Unknown error" };
+        }
 
         styleAppliedSummary = posts
           .map((p) => String(p.styleApplied ?? "").trim())
@@ -296,6 +428,7 @@ export async function POST(req: Request) {
         bodies = null;
         sourcesUsedSummary = [];
         styleAppliedSummary = [];
+        review = { changedCount: 0, error: null };
         generator = "mock";
       }
     }
@@ -303,6 +436,7 @@ export async function POST(req: Request) {
     const meta = {
       generator,
       llmError,
+      review,
       used: {
         persona: Boolean(personaId && persona),
         genre: Boolean(genreId && genre),

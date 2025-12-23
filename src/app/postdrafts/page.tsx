@@ -346,6 +346,8 @@ export default function PostDraftsPage() {
         ? "本文はAIで生成されました"
         : "本文はモックで生成されました（AI失敗時など）";
       const llmError = meta?.llmError ? String(meta.llmError) : "";
+      const reviewChangedCount = Number(meta?.review?.changedCount ?? 0) || 0;
+      const reviewError = meta?.review?.error ? String(meta.review.error) : "";
       const sourcesUsed = Array.isArray(meta?.sourcesUsed) ? (meta.sourcesUsed as any[]) : [];
       const sourcesUsedLabel = sourcesUsed
         .map((x) => {
@@ -371,6 +373,8 @@ export default function PostDraftsPage() {
             `- 参照アカウント: ${meta.used.sources ? `有効 ${sourcesActive}件` : "未設定（/setup の参照アカウントを追加）"}`,
             ...(sourcesUsedLabel ? [`- 自動選択された参考アカウント: ${sourcesUsedLabel}`] : []),
             ...(styleAppliedLabel ? [`- 書き分けの狙い（参考）: ${styleAppliedLabel}`] : []),
+            ...(meta?.generator === "openai" ? [`- 品質チェック: 修正 ${reviewChangedCount}件${reviewError ? "（一部失敗）" : ""}`] : []),
+            ...(reviewError ? [`- 品質チェックエラー（参考）: ${reviewError}`] : []),
             ...(llmError ? [`- AIエラー（参考）: ${llmError}`] : []),
             "（入力は不要）参照アカウントは /setup の『参照アカウント』で登録します。memo 例:『結論→理由→一言』『箇条書き多め』『短文テンポ』『問いかけで締める』",
           ].join("\n")
