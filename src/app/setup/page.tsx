@@ -239,8 +239,8 @@ export default function SetupPage() {
 
   const narratorProfileJson = useMemo(() => JSON.stringify(narratorProfile), [narratorProfile]);
 
-  const [genreKey, setGenreKey] = useState<string>(FORMAT_PRESETS[0]?.key ?? "news-summary");
-  const [genreJson, setGenreJson] = useState<string>(JSON.stringify(FORMAT_PRESETS[0]?.profile ?? {}, null, 2));
+  const [genreKey, setGenreKey] = useState<string>("");
+  const [genreJson, setGenreJson] = useState<string>("{}");
 
   const [sourceAccountRows, setSourceAccountRows] = useState<SourceAccount[]>([
     { platform: "X", handle: "@example1", weight: 3, memo: "結論→理由→一言で締める" },
@@ -294,7 +294,15 @@ export default function SetupPage() {
     }
   }, [personaJson]);
 
-  const genreJsonValid = true;
+  const genreJsonValid = useMemo(() => {
+    if (!String(genreKey ?? "").trim()) return true;
+    try {
+      const parsed = JSON.parse(genreJson);
+      return typeof parsed === "object" && parsed !== null;
+    } catch {
+      return false;
+    }
+  }, [genreJson, genreKey]);
 
   const canGoNextWorkspace = Boolean(workspaceName.trim() && timezone.trim());
   const canGoNextPersona = useMemo(() => {
@@ -310,7 +318,7 @@ export default function SetupPage() {
     const hasNotes = String(narratorNotes ?? "").trim().length > 0;
     return hasRole || hasNotes;
   }, [narratorNotes, narratorRoleOrPosition]);
-  const canGoNextGenre = Boolean(genreKey.trim() && genreJsonValid);
+  const canGoNextGenre = Boolean(genreJsonValid);
   const canGoNextSources = sourceAccounts.length > 0;
   const canRun = canGoNextWorkspace && canGoNextPersona && canGoNextNarrator && canGoNextGenre && canGoNextSources;
 
@@ -425,6 +433,9 @@ export default function SetupPage() {
     setSubmitting(true);
     setResult("");
 
+    const genreKeyForSubmit = String(genreKey ?? "").trim() || undefined;
+    const genreProfileJsonForSubmit = genreKeyForSubmit ? genreJson : undefined;
+
     try {
       const res = await fetch("/api/setup", {
         method: "POST",
@@ -435,8 +446,8 @@ export default function SetupPage() {
           postingTargets,
           personaProfileJson: personaJson,
           narratorProfileJson,
-          genreKey,
-          genreProfileJson: genreJson,
+          genreKey: genreKeyForSubmit,
+          genreProfileJson: genreProfileJsonForSubmit,
           sourceAccounts,
         }),
       });
@@ -828,8 +839,8 @@ export default function SetupPage() {
 
         {step === "genre" ? (
           <div className="spa-card p-6 space-y-3">
-            <div className="text-sm font-medium">フォーマット（デフォルト固定）</div>
-            <div className="text-xs text-zinc-600">投稿の「型」を選びます。まずは1つ固定で運用します。</div>
+            <div className="text-sm font-medium">フォーマット（任意）</div>
+            <div className="text-xs text-zinc-600">投稿の「型」を選びます。不要なら「なし」でOKです。</div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="space-y-1">
@@ -840,10 +851,15 @@ export default function SetupPage() {
                   onChange={(e) => {
                     const key = e.target.value;
                     setGenreKey(key);
+                    if (!String(key).trim()) {
+                      setGenreJson("{}");
+                      return;
+                    }
                     const preset = FORMAT_PRESETS.find((p) => p.key === key) ?? FORMAT_PRESETS[0];
                     setGenreJson(JSON.stringify(preset?.profile ?? {}, null, 2));
                   }}
                 >
+                  <option value="">なし</option>
                   {FORMAT_PRESETS.map((p) => (
                     <option key={p.key} value={p.key}>
                       {p.label}
@@ -853,12 +869,14 @@ export default function SetupPage() {
               </label>
             </div>
 
-            <textarea
-              className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-              rows={10}
-              value={genreJson}
-              readOnly
-            />
+            {String(genreKey ?? "").trim() ? (
+              <textarea
+                className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                rows={10}
+                value={genreJson}
+                readOnly
+              />
+            ) : null}
 
             <div className="flex items-center justify-between gap-2">
               <button className="spa-button-secondary" onClick={() => setStep("narrator")}>
@@ -1020,7 +1038,7 @@ export default function SetupPage() {
                 {narratorProfile.gender !== "unspecified" ? ` / ${narratorProfile.gender}` : ""}
               </div>
               <div className="mt-2 text-xs text-zinc-600">フォーマットキー</div>
-              <div className="font-medium">{genreKey}</div>
+              <div className="font-medium">{String(genreKey ?? "").trim() || "(なし)"}</div>
               <div className="mt-2 text-xs text-zinc-600">参照アカウント</div>
               <div className="font-medium">{sourceAccounts.length} 件</div>
             </div>

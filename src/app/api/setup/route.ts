@@ -71,10 +71,12 @@ export async function POST(req: Request) {
     const narratorProfileJson = narratorProfileJsonRaw === undefined ? null : String(narratorProfileJsonRaw ?? "{}").trim();
     const narratorProfile = narratorProfileJson ? parseJsonOrThrow(narratorProfileJson, "narratorProfileJson") : null;
 
-    const genreKey = String(body.genreKey ?? "default").trim() || "default";
+    const genreKeyRaw = body.genreKey;
+    const genreKey = String(genreKeyRaw ?? "").trim();
+    const hasGenre = Boolean(genreKey);
 
-    const genreProfileJson = String(body.genreProfileJson ?? "{}").trim() || "{}";
-    const genreProfile = parseJsonOrThrow(genreProfileJson, "genreProfileJson");
+    const genreProfileJson = hasGenre ? String(body.genreProfileJson ?? "{}").trim() || "{}" : null;
+    const genreProfile = genreProfileJson ? parseJsonOrThrow(genreProfileJson, "genreProfileJson") : null;
 
     const sourceAccountsInput = Array.isArray(body.sourceAccounts) ? body.sourceAccounts : [];
     const sourceAccounts = sourceAccountsInput
@@ -102,13 +104,15 @@ export async function POST(req: Request) {
       },
     });
 
-    const genre = await prisma.genre.create({
-      data: {
-        workspaceId: workspace.id,
-        key: genreKey,
-        profile: genreProfile,
-      },
-    });
+    const genre = hasGenre
+      ? await prisma.genre.create({
+          data: {
+            workspaceId: workspace.id,
+            key: genreKey,
+            profile: genreProfile ?? {},
+          },
+        })
+      : null;
 
     await prisma.workspaceSettings.create({
       data: {
@@ -116,7 +120,7 @@ export async function POST(req: Request) {
         timezone,
         postingTargets,
         fixedPersonaId: persona.id,
-        defaultGenreId: genre.id,
+        defaultGenreId: genre?.id ?? null,
         narratorProfile,
       },
     });
@@ -140,7 +144,7 @@ export async function POST(req: Request) {
       ok: true,
       workspaceId: workspace.id,
       personaId: persona.id,
-      genreId: genre.id,
+      genreId: genre?.id ?? null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
