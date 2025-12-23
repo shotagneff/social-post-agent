@@ -57,6 +57,7 @@ type WorkspaceItem = {
 type SetupStep =
   | "workspace"
   | "persona"
+  | "narrator"
   | "genre"
   | "sources"
   | "confirm"
@@ -68,16 +69,78 @@ function stepTitle(step: SetupStep) {
       return "1. 投稿先";
     case "persona":
       return "2. ペルソナ";
+    case "narrator":
+      return "3. 語り手";
     case "genre":
-      return "3. ジャンル";
+      return "4. フォーマット";
     case "sources":
-      return "4. 参照アカウント";
+      return "5. 参照アカウント";
     case "confirm":
-      return "5. 確認";
+      return "6. 確認";
     case "scheduling":
-      return "6. 投稿枠（スケジューリング）";
+      return "7. 投稿枠（スケジューリング）";
   }
 }
+
+type NarratorPoliteness = "casual" | "polite";
+type NarratorEmojiLevel = "none" | "low" | "medium";
+type NarratorTempo = "slow" | "normal" | "fast";
+type NarratorEnding = "question" | "cta" | "statement";
+
+type NarratorProfile = {
+  firstPerson: string;
+  politeness: NarratorPoliteness;
+  emojiLevel: NarratorEmojiLevel;
+  tempo: NarratorTempo;
+  ending: NarratorEnding;
+  maxEmojisPerPost: number;
+  version: 1;
+};
+
+type FormatPreset = {
+  key: string;
+  label: string;
+  profile: unknown;
+};
+
+const FORMAT_PRESETS: FormatPreset[] = [
+  {
+    key: "news-summary",
+    label: "ニュース要約（結論→要点→一言）",
+    profile: {
+      kind: "format",
+      structure: "結論1行→要点3つ→補足1行→一言で締める",
+      cta: "任意（最後に軽く問いかけても良い）",
+      bullets: { preferred: true, maxItems: 5 },
+      lineBreaks: { preferred: true },
+      version: 1,
+    },
+  },
+  {
+    key: "checklist",
+    label: "チェックリスト（3〜7項目）",
+    profile: {
+      kind: "format",
+      structure: "冒頭1行→チェック項目（3〜7）→最後に1行",
+      cta: "保存/あとで見返す系の一言 or 質問で締める",
+      bullets: { preferred: true, maxItems: 7 },
+      lineBreaks: { preferred: true },
+      version: 1,
+    },
+  },
+  {
+    key: "how-to",
+    label: "手順（Step 1→2→3）",
+    profile: {
+      kind: "format",
+      structure: "結論→手順（Step 1〜3）→注意点→締め",
+      cta: "やってみたらどうだった？で締める",
+      bullets: { preferred: true, maxItems: 6 },
+      lineBreaks: { preferred: true },
+      version: 1,
+    },
+  },
+];
 
 function Stepper(props: { steps: string[]; currentIndex: number }) {
   const { steps, currentIndex } = props;
@@ -160,20 +223,30 @@ export default function SetupPage() {
     ),
   );
 
-  const [genreKey, setGenreKey] = useState("job-hunt");
-  const [genreJson, setGenreJson] = useState(
-    JSON.stringify(
-      {
-        audience: "",
-        style_guide: { structure: "", cta: "" },
-        output_formats: { X: {}, THREADS: {} },
-        banned_topics: [],
-        banned_claims: [],
-      },
-      null,
-      2,
-    ),
-  );
+  const [narratorFirstPerson, setNarratorFirstPerson] = useState<string>("私");
+  const [narratorPoliteness, setNarratorPoliteness] = useState<NarratorPoliteness>("polite");
+  const [narratorEmojiLevel, setNarratorEmojiLevel] = useState<NarratorEmojiLevel>("low");
+  const [narratorTempo, setNarratorTempo] = useState<NarratorTempo>("normal");
+  const [narratorEnding, setNarratorEnding] = useState<NarratorEnding>("question");
+
+  const narratorProfile: NarratorProfile = useMemo(() => {
+    const fp = String(narratorFirstPerson ?? "").trim() || "私";
+    const maxEmojisPerPost = narratorEmojiLevel === "none" ? 0 : narratorEmojiLevel === "low" ? 1 : 3;
+    return {
+      firstPerson: fp,
+      politeness: narratorPoliteness,
+      emojiLevel: narratorEmojiLevel,
+      tempo: narratorTempo,
+      ending: narratorEnding,
+      maxEmojisPerPost,
+      version: 1,
+    };
+  }, [narratorEmojiLevel, narratorEnding, narratorFirstPerson, narratorPoliteness, narratorTempo]);
+
+  const narratorProfileJson = useMemo(() => JSON.stringify(narratorProfile), [narratorProfile]);
+
+  const [genreKey, setGenreKey] = useState<string>(FORMAT_PRESETS[0]?.key ?? "news-summary");
+  const [genreJson, setGenreJson] = useState<string>(JSON.stringify(FORMAT_PRESETS[0]?.profile ?? {}, null, 2));
 
   const [sourceAccountRows, setSourceAccountRows] = useState<SourceAccount[]>([
     { platform: "X", handle: "@example1", weight: 3, memo: "結論→理由→一言で締める" },
@@ -227,24 +300,19 @@ export default function SetupPage() {
     }
   }, [personaJson]);
 
-  const genreJsonValid = useMemo(() => {
-    try {
-      JSON.parse(genreJson);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [genreJson]);
+  const genreJsonValid = true;
 
   const canGoNextWorkspace = Boolean(workspaceName.trim() && timezone.trim());
   const canGoNextPersona = personaJsonValid;
+  const canGoNextNarrator = Boolean(String(narratorFirstPerson ?? "").trim());
   const canGoNextGenre = Boolean(genreKey.trim() && genreJsonValid);
   const canGoNextSources = sourceAccounts.length > 0;
-  const canRun = canGoNextWorkspace && canGoNextPersona && canGoNextGenre && canGoNextSources;
+  const canRun = canGoNextWorkspace && canGoNextPersona && canGoNextNarrator && canGoNextGenre && canGoNextSources;
 
   const stepOrder: SetupStep[] = [
     "workspace",
     "persona",
+    "narrator",
     "genre",
     "sources",
     "confirm",
@@ -254,7 +322,8 @@ export default function SetupPage() {
   const stepLabels = [
     "投稿先",
     "ペルソナ",
-    "ジャンル",
+    "語り手",
+    "フォーマット",
     "参照アカウント",
     "確認",
     "投稿枠",
@@ -268,6 +337,7 @@ export default function SetupPage() {
       if (
         forced === "workspace" ||
         forced === "persona" ||
+        forced === "narrator" ||
         forced === "genre" ||
         forced === "sources" ||
         forced === "confirm" ||
@@ -359,6 +429,7 @@ export default function SetupPage() {
           timezone,
           postingTargets,
           personaProfileJson: personaJson,
+          narratorProfileJson,
           genreKey,
           genreProfileJson: genreJson,
           sourceAccounts,
@@ -533,7 +604,7 @@ export default function SetupPage() {
                   選択中: <span className="font-mono">{workspaceId}</span>
                 </div>
                 <button className="spa-button-secondary" onClick={() => setStep("scheduling")}>
-                  投稿枠（ステップ6）へ
+                  投稿枠（ステップ7）へ
                 </button>
               </div>
             ) : null}
@@ -659,6 +730,92 @@ export default function SetupPage() {
               <button
                 className="spa-button-primary disabled:opacity-50"
                 disabled={!canGoNextPersona}
+                onClick={() => setStep("narrator")}
+              >
+                次へ
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {step === "narrator" ? (
+          <div className="spa-card p-6 space-y-4">
+            <div className="text-sm font-medium">語り手（フォーム）</div>
+            <div className="text-xs text-zinc-600">
+              一人称や語尾などの「話し方」を固定します。
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="space-y-1">
+                <div className="text-sm font-medium">一人称</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={narratorFirstPerson}
+                  onChange={(e) => setNarratorFirstPerson(e.target.value)}
+                />
+              </label>
+
+              <label className="space-y-1">
+                <div className="text-sm font-medium">敬語</div>
+                <select
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={narratorPoliteness}
+                  onChange={(e) => setNarratorPoliteness(e.target.value as NarratorPoliteness)}
+                >
+                  <option value="polite">丁寧（です・ます）</option>
+                  <option value="casual">カジュアル（だ・する）</option>
+                </select>
+              </label>
+
+              <label className="space-y-1">
+                <div className="text-sm font-medium">絵文字</div>
+                <select
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={narratorEmojiLevel}
+                  onChange={(e) => setNarratorEmojiLevel(e.target.value as NarratorEmojiLevel)}
+                >
+                  <option value="none">なし</option>
+                  <option value="low">少なめ</option>
+                  <option value="medium">普通</option>
+                </select>
+              </label>
+
+              <label className="space-y-1">
+                <div className="text-sm font-medium">テンポ</div>
+                <select
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={narratorTempo}
+                  onChange={(e) => setNarratorTempo(e.target.value as NarratorTempo)}
+                >
+                  <option value="slow">ゆっくり（説明多め）</option>
+                  <option value="normal">標準</option>
+                  <option value="fast">速い（短文テンポ）</option>
+                </select>
+              </label>
+
+              <label className="space-y-1 md:col-span-2">
+                <div className="text-sm font-medium">締め方</div>
+                <select
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={narratorEnding}
+                  onChange={(e) => setNarratorEnding(e.target.value as NarratorEnding)}
+                >
+                  <option value="question">問いかけで締める</option>
+                  <option value="cta">行動提案で締める</option>
+                  <option value="statement">言い切りで締める</option>
+                </select>
+              </label>
+            </div>
+
+            {!canGoNextNarrator ? <div className="text-xs text-red-700">一人称は必須です。</div> : null}
+
+            <div className="flex items-center justify-between gap-2">
+              <button className="spa-button-secondary" onClick={() => setStep("persona")}>
+                戻る
+              </button>
+              <button
+                className="spa-button-primary disabled:opacity-50"
+                disabled={!canGoNextNarrator}
                 onClick={() => setStep("genre")}
               >
                 次へ
@@ -669,29 +826,40 @@ export default function SetupPage() {
 
         {step === "genre" ? (
           <div className="spa-card p-6 space-y-3">
-            <div className="text-sm font-medium">ジャンル（JSON）</div>
+            <div className="text-sm font-medium">フォーマット（デフォルト固定）</div>
+            <div className="text-xs text-zinc-600">投稿の「型」を選びます。まずは1つ固定で運用します。</div>
+
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="space-y-1">
-                <div className="text-sm font-medium">ジャンルキー</div>
-                <input
+                <div className="text-sm font-medium">フォーマット</div>
+                <select
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                   value={genreKey}
-                  onChange={(e) => setGenreKey(e.target.value)}
-                />
+                  onChange={(e) => {
+                    const key = e.target.value;
+                    setGenreKey(key);
+                    const preset = FORMAT_PRESETS.find((p) => p.key === key) ?? FORMAT_PRESETS[0];
+                    setGenreJson(JSON.stringify(preset?.profile ?? {}, null, 2));
+                  }}
+                >
+                  {FORMAT_PRESETS.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
+
             <textarea
               className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-              rows={12}
+              rows={10}
               value={genreJson}
-              onChange={(e) => setGenreJson(e.target.value)}
+              readOnly
             />
-            {!genreJsonValid ? (
-              <div className="text-xs text-red-700">JSONの形式が正しくありません。</div>
-            ) : null}
 
             <div className="flex items-center justify-between gap-2">
-              <button className="spa-button-secondary" onClick={() => setStep("persona")}>
+              <button className="spa-button-secondary" onClick={() => setStep("narrator")}>
                 戻る
               </button>
               <button
@@ -844,7 +1012,11 @@ export default function SetupPage() {
               <div className="font-medium">{timezone}</div>
               <div className="mt-2 text-xs text-zinc-600">投稿先</div>
               <div className="font-medium">{postingTargets.join(", ")}</div>
-              <div className="mt-2 text-xs text-zinc-600">ジャンルキー</div>
+              <div className="mt-2 text-xs text-zinc-600">語り手</div>
+              <div className="font-medium">
+                {narratorProfile.firstPerson} / {narratorProfile.politeness} / {narratorProfile.emojiLevel} / {narratorProfile.tempo} / {narratorProfile.ending}
+              </div>
+              <div className="mt-2 text-xs text-zinc-600">フォーマットキー</div>
               <div className="font-medium">{genreKey}</div>
               <div className="mt-2 text-xs text-zinc-600">参照アカウント</div>
               <div className="font-medium">{sourceAccounts.length} 件</div>

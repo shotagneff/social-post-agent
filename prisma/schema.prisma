@@ -76,6 +76,7 @@ model WorkspaceSettings {
   threadsTokenExpiresAt DateTime?
   fixedPersonaId String?
   defaultGenreId String?
+  narratorProfile Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -10,6 +10,7 @@ type SetupBody = {
   timezone?: string;
   postingTargets?: Platform[];
   personaProfileJson?: string;
+  narratorProfileJson?: string;
   genreKey?: string;
   genreProfileJson?: string;
   sourceAccounts?: Array<{
@@ -66,6 +67,10 @@ export async function POST(req: Request) {
     const personaProfileJson = String(body.personaProfileJson ?? "{}").trim() || "{}";
     const personaProfile = parseJsonOrThrow(personaProfileJson, "personaProfileJson");
 
+    const narratorProfileJsonRaw = body.narratorProfileJson;
+    const narratorProfileJson = narratorProfileJsonRaw === undefined ? null : String(narratorProfileJsonRaw ?? "{}").trim();
+    const narratorProfile = narratorProfileJson ? parseJsonOrThrow(narratorProfileJson, "narratorProfileJson") : null;
+
     const genreKey = String(body.genreKey ?? "default").trim() || "default";
 
     const genreProfileJson = String(body.genreProfileJson ?? "{}").trim() || "{}";
@@ -112,6 +117,7 @@ export async function POST(req: Request) {
         postingTargets,
         fixedPersonaId: persona.id,
         defaultGenreId: genre.id,
+        narratorProfile,
       },
     });
 

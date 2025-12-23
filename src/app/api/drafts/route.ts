@@ -44,6 +44,7 @@ function extractJsonObject(text: string) {
 async function generateVariantsWithOpenAI(args: {
   theme: string;
   personaProfile: unknown;
+  narratorProfile: unknown;
   genreProfile: unknown;
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -54,6 +55,7 @@ async function generateVariantsWithOpenAI(args: {
   const prompt = {
     theme: args.theme,
     persona: args.personaProfile,
+    narrator: args.narratorProfile,
     genre: args.genreProfile,
     requirements: {
       language: "ja",
@@ -166,6 +168,7 @@ export async function POST(req: Request) {
           select: {
             fixedPersonaId: true,
             defaultGenreId: true,
+            narratorProfile: true,
           },
         },
       },
@@ -196,6 +199,7 @@ export async function POST(req: Request) {
         variants = await generateVariantsWithOpenAI({
           theme,
           personaProfile: persona?.profile ?? {},
+          narratorProfile: workspace.settings?.narratorProfile ?? {},
           genreProfile: genre?.profile ?? {},
         });
         generator = "openai";

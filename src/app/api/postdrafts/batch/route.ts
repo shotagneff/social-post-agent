@@ -33,6 +33,7 @@ async function generatePostsWithOpenAI(args: {
   platform: Platform;
   count: number;
   personaProfile: unknown;
+  narratorProfile: unknown;
   genreProfile: unknown;
   sources: Array<{ platform: Platform; handle: string; weight: number | null; memo: string | null }>;
 }) {
@@ -59,6 +60,7 @@ async function generatePostsWithOpenAI(args: {
     maxLen,
     theme: args.theme,
     persona: args.personaProfile,
+    narrator: args.narratorProfile,
     genre: args.genreProfile,
     sourceAccounts: sourceAccountsForPrompt,
     output: {
@@ -142,6 +144,7 @@ async function generatePostsWithOpenAI(args: {
 async function reviewAndRewritePostsWithOpenAI(args: {
   platform: Platform;
   personaProfile: unknown;
+  narratorProfile: unknown;
   genreProfile: unknown;
   sources: Array<{ platform: Platform; handle: string; weight: number | null; memo: string | null }>;
   posts: Array<{ text: string; sourcesUsed: Array<{ platform: Platform; handle: string }> }>;
@@ -168,6 +171,7 @@ async function reviewAndRewritePostsWithOpenAI(args: {
     platform: args.platform,
     maxLen,
     persona: args.personaProfile,
+    narrator: args.narratorProfile,
     genre: args.genreProfile,
     sourceAccounts: sourceAccountsForPrompt,
     inputPosts: args.posts,
@@ -344,7 +348,7 @@ export async function POST(req: Request) {
     const [settings, sourcesCount] = await Promise.all([
       prismaAny.workspaceSettings.findUnique({
         where: { workspaceId },
-        select: { fixedPersonaId: true, defaultGenreId: true },
+        select: { fixedPersonaId: true, defaultGenreId: true, narratorProfile: true },
       }),
       prismaAny.sourceAccount.count({
         where: { workspaceId, isActive: true, platform },
@@ -383,6 +387,7 @@ export async function POST(req: Request) {
           platform,
           count,
           personaProfile: persona?.profile ?? {},
+          narratorProfile: settings?.narratorProfile ?? {},
           genreProfile: genre?.profile ?? {},
           sources: Array.isArray(sources) ? sources : [],
         });
@@ -393,6 +398,7 @@ export async function POST(req: Request) {
           const reviewed = await reviewAndRewritePostsWithOpenAI({
             platform,
             personaProfile: persona?.profile ?? {},
+            narratorProfile: settings?.narratorProfile ?? {},
             genreProfile: genre?.profile ?? {},
             sources: Array.isArray(sources) ? sources : [],
             posts: posts.map((p) => ({ text: p.text, sourcesUsed: p.sourcesUsed ?? [] })),
