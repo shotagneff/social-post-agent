@@ -31,6 +31,8 @@ function extractJsonObject(text: string) {
 
 async function generatePostsWithOpenAI(args: {
   theme: string;
+  themes: string[];
+  perThemeCounts: number[];
   platform: Platform;
   count: number;
   personaProfile: unknown;
@@ -61,6 +63,8 @@ async function generatePostsWithOpenAI(args: {
     count: args.count,
     maxLen,
     theme: args.theme,
+    themes: args.themes,
+    perThemeCounts: args.perThemeCounts,
     persona: args.personaProfile,
     narrator: args.narratorProfile,
     genre: args.genreProfile,
@@ -68,12 +72,15 @@ async function generatePostsWithOpenAI(args: {
     sourceAccounts: sourceAccountsForPrompt,
     output: {
       posts:
-        "{text: string, sourcesUsed: {platform: 'X'|'THREADS', handle: string}[], styleApplied?: string}[] (length must equal count)",
+        "{text: string, themeIndex: 0|1|2|3|4, sourcesUsed: {platform: 'X'|'THREADS', handle: string}[], styleApplied?: string}[] (length must equal count)",
     },
     rules: [
       "Return ONLY valid JSON.",
       "Do not include markdown.",
       "Each post must be self-contained.",
+      "First, interpret themes as 5 subtopics derived from the base theme.",
+      "For each post, pick exactly one themeIndex (0..4) and write to that subtopic.",
+      "You MUST generate exactly perThemeCounts[i] posts for each themeIndex i (0..4).",
       "Keep within maxLen characters; if close, prefer shorter.",
       "Avoid repeating the same hook across posts; vary angles.",
       "For each post, choose 1-2 sourceAccounts and set sourcesUsed accordingly.",
@@ -130,6 +137,7 @@ async function generatePostsWithOpenAI(args: {
   const out = posts
     .map((p) => {
       const text = String(p?.text ?? "").trim();
+      const themeIndex = Number(p?.themeIndex);
       const sourcesUsedRaw = Array.isArray(p?.sourcesUsed) ? p.sourcesUsed : [];
       const sourcesUsed = sourcesUsedRaw
         .map((s: any) => ({
@@ -138,7 +146,7 @@ async function generatePostsWithOpenAI(args: {
         }))
         .filter((s: any) => Boolean(s.handle));
       const styleApplied = String(p?.styleApplied ?? "").trim();
-      return { text, sourcesUsed, styleApplied };
+      return { text, themeIndex, sourcesUsed, styleApplied };
     })
     .filter((p) => Boolean(p.text));
 
@@ -146,7 +154,110 @@ async function generatePostsWithOpenAI(args: {
     throw new Error(`OpenAI JSON invalid: posts.length=${out.length} (expected ${args.count})`);
   }
 
+  const themeCounts = new Array(args.themes.length).fill(0);
+  for (const p of out) {
+    if (!Number.isFinite(p.themeIndex) || p.themeIndex < 0 || p.themeIndex >= args.themes.length) {
+      throw new Error("OpenAI JSON invalid: themeIndex out of range");
+    }
+    themeCounts[p.themeIndex]++;
+  }
+  for (let i = 0; i < themeCounts.length; i++) {
+    const expected = Number(args.perThemeCounts?.[i] ?? 0) || 0;
+    if (themeCounts[i] !== expected) {
+      throw new Error(
+        `OpenAI JSON invalid: themeIndex=${i} count=${themeCounts[i]} (expected ${expected})`,
+      );
+    }
+  }
+
   return out;
+}
+
+async function generateThemeVariantsWithOpenAI(args: {
+  baseTheme: string;
+  personaProfile: unknown;
+  audience: unknown;
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is missing");
+  }
+
+  const prompt = {
+    language: "ja",
+    baseTheme: args.baseTheme,
+    persona: args.personaProfile,
+    audience: args.audience,
+    output: {
+      themes: "string[] (length must be 5)",
+    },
+    rules: [
+      "Return ONLY valid JSON.",
+      "Do not include markdown.",
+      "Generate 5 distinct subtopics derived from baseTheme.",
+      "Each theme should be a short Japanese phrase (max 40 chars).",
+      "Themes must be mutually distinct and cover different angles.",
+    ],
+  };
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      temperature: 0.6,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: "You generate Japanese theme variants for social media posts. Output only valid JSON.",
+        },
+        { role: "user", content: JSON.stringify(prompt) },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`OpenAI theme error: ${res.status} ${text}`);
+  }
+
+  const json = (await res.json().catch(() => null)) as any;
+  const content = String(json?.choices?.[0]?.message?.content ?? "");
+  const jsonText = extractJsonObject(content);
+  if (!jsonText) {
+    throw new Error("OpenAI returned non-JSON content (themes)");
+  }
+
+  const parsed = JSON.parse(jsonText) as any;
+  const themesRaw = Array.isArray(parsed?.themes) ? (parsed.themes as any[]) : [];
+  const themes = themesRaw.map((x) => String(x ?? "").trim()).filter(Boolean).slice(0, 5);
+  if (themes.length !== 5) {
+    throw new Error(`OpenAI JSON invalid: themes.length=${themes.length} (expected 5)`);
+  }
+  return themes;
+}
+
+function buildThemeVariantsMock(baseTheme: string) {
+  const t = String(baseTheme ?? "").trim() || "無題";
+  return [
+    `${t}（よくある失敗）`,
+    `${t}（具体例）`,
+    `${t}（最短手順）`,
+    `${t}（考え方）`,
+    `${t}（チェックリスト）`,
+  ];
+}
+
+function computeThemeDistribution(themeCount: number, total: number) {
+  const n = Math.max(1, Math.min(themeCount, total));
+  const base = Math.floor(total / n);
+  const remainder = total % n;
+  const counts = Array.from({ length: n }).map((_, i) => base + (i < remainder ? 1 : 0));
+  return { counts, n };
 }
 
 async function reviewAndRewritePostsWithOpenAI(args: {
@@ -399,11 +510,23 @@ export async function POST(req: Request) {
     let sourcesUsedSummary: Array<{ handle: string; count: number }> = [];
     let styleAppliedSummary: string[] = [];
     let review: { changedCount: number; error: string | null } = { changedCount: 0, error: null };
+    let themesUsed: string[] = [];
 
     if (useOpenAI) {
       try {
+        const themes = await generateThemeVariantsWithOpenAI({
+          baseTheme: theme,
+          personaProfile: persona?.profile ?? {},
+          audience,
+        });
+        const distribution = computeThemeDistribution(themes.length, count);
+        const perThemeCounts = distribution.counts;
+        const resolvedThemes = themes.slice(0, perThemeCounts.length);
+
         const posts = await generatePostsWithOpenAI({
           theme,
+          themes: resolvedThemes,
+          perThemeCounts,
           platform,
           count,
           personaProfile: persona?.profile ?? {},
@@ -412,6 +535,8 @@ export async function POST(req: Request) {
           audience,
           sources: Array.isArray(sources) ? sources : [],
         });
+
+        themesUsed = resolvedThemes;
 
         bodies = posts.map((p) => p.text);
 
@@ -457,14 +582,34 @@ export async function POST(req: Request) {
         sourcesUsedSummary = [];
         styleAppliedSummary = [];
         review = { changedCount: 0, error: null };
+        themesUsed = [];
         generator = "mock";
       }
+    }
+
+    if (!useOpenAI || generator !== "openai") {
+      const themes = buildThemeVariantsMock(theme);
+      const distribution = computeThemeDistribution(Math.min(5, themes.length), count);
+      const perThemeCounts = distribution.counts;
+      const resolved = themes.slice(0, perThemeCounts.length);
+      themesUsed = resolved;
+      const outBodies: string[] = [];
+      let cursor = 0;
+      for (let themeIndex = 0; themeIndex < resolved.length; themeIndex++) {
+        const c = perThemeCounts[themeIndex] ?? 0;
+        for (let j = 0; j < c; j++) {
+          outBodies.push(buildMockPost(resolved[themeIndex] ?? theme, platform, cursor));
+          cursor++;
+        }
+      }
+      bodies = outBodies;
     }
 
     const meta = {
       generator,
       llmError,
       review,
+      themesUsed,
       used: {
         persona: Boolean(personaId && persona),
         genre: Boolean(genreId && genre),

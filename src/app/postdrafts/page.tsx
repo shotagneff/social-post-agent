@@ -390,6 +390,13 @@ export default function PostDraftsPage() {
       const llmError = meta?.llmError ? String(meta.llmError) : "";
       const reviewChangedCount = Number(meta?.review?.changedCount ?? 0) || 0;
       const reviewError = meta?.review?.error ? String(meta.review.error) : "";
+      const themesUsed = Array.isArray(meta?.themesUsed) ? (meta.themesUsed as any[]) : [];
+      const themesUsedLabel = themesUsed
+        .map((x) => String(x ?? "").trim())
+        .filter(Boolean)
+        .slice(0, 5)
+        .map((t, i) => `${i + 1}. ${t}`)
+        .join("\n");
       const sourcesUsed = Array.isArray(meta?.sourcesUsed) ? (meta.sourcesUsed as any[]) : [];
       const sourcesUsedLabel = sourcesUsed
         .map((x) => {
@@ -410,6 +417,7 @@ export default function PostDraftsPage() {
         ? [
             "設定チェック（投稿文の精度に影響）",
             `- 本文生成: ${genLabel}（${genNote}）`,
+            ...(themesUsedLabel ? [`- 今回のテーマ（5つ）\n${themesUsedLabel}`] : []),
             `- ペルソナ: ${meta.used.persona ? "設定済み" : "未設定（/setup で設定）"}`,
             `- ジャンル: ${meta.used.genre ? "設定済み" : "未設定（/setup で設定）"}`,
             `- 参照アカウント: ${meta.used.sources ? `有効 ${sourcesActive}件` : "未設定（/setup の参照アカウントを追加）"}`,
