@@ -647,17 +647,6 @@ export default function SetupPage() {
             {workspacesLoading ? <div className="text-xs text-zinc-600">読み込み中...</div> : null}
             {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
 
-            {workspaceId.trim() ? (
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between rounded-xl border border-zinc-200 bg-white p-3">
-                <div className="text-xs text-zinc-700">
-                  選択中: <span className="font-mono">{workspaceId}</span>
-                </div>
-                <button className="spa-button-secondary" onClick={() => setStep("scheduling")}>
-                  投稿枠（ステップ7）へ
-                </button>
-              </div>
-            ) : null}
-
             {workspaces.length > 0 ? (
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm">
