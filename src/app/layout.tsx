@@ -42,6 +42,9 @@ export default function RootLayout({
                 <a className="rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100" href="/setup?step=workspace">
                   セットアップ
                 </a>
+                <a className="rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100" href="/themes">
+                  テーマ設計
+                </a>
                 <a className="rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100" href="/threads/connect">
                   Threads連携
                 </a>

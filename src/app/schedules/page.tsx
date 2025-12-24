@@ -271,6 +271,19 @@ export default function SchedulesPage() {
           </Link>
         </div>
 
+        <div className="spa-card p-4">
+          <div className="text-sm font-semibold">次のステップ</div>
+          <div className="mt-1 text-xs text-zinc-600">テーマ設計 → 投稿案生成 → 予約、の順で進めます。</div>
+          <div className="mt-3 flex flex-col gap-2 md:flex-row">
+            <Link className="spa-button-secondary text-center" href="/themes">
+              テーマ設計へ
+            </Link>
+            <Link className="spa-button-primary text-center" href="/postdrafts">
+              投稿案の作成へ
+            </Link>
+          </div>
+        </div>
+
         <div className="spa-card p-4 text-sm text-zinc-700">
           下書きから作成した予約を一覧で確認できます。「予約を処理」を押すと、期限が過ぎた予約を投稿済みに進めます（いまはダミー投稿です）。
         </div>
