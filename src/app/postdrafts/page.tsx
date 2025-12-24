@@ -91,6 +91,18 @@ function clip(text: string, n: number) {
   return `${t.slice(0, n)}…`;
 }
 
+function Spinner(props: { className?: string }) {
+  const cls = String(props.className ?? "");
+  return (
+    <span
+      className={
+        `inline-block h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 ${cls}`.trim()
+      }
+      aria-label="loading"
+    />
+  );
+}
+
 function Stepper(props: { steps: string[]; currentIndex: number }) {
   const { steps, currentIndex } = props;
   return (
@@ -699,7 +711,10 @@ export default function PostDraftsPage() {
               disabled={!canRun || working}
               onClick={createAndTentativelySchedule}
             >
-              {working ? "実行中..." : "大量生成して仮予約を作成"}
+              <span className="inline-flex items-center gap-2">
+                {working ? <Spinner /> : null}
+                <span>{working ? "実行中..." : "大量生成して仮予約を作成"}</span>
+              </span>
             </button>
 
             <button
