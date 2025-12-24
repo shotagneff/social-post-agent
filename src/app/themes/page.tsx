@@ -53,6 +53,10 @@ export default function ThemesPage() {
 
   const [platform, setPlatform] = useState<Platform>("X");
 
+  const [seedGoalByPlatform, setSeedGoalByPlatform] = useState<Record<Platform, string>>({ X: "", THREADS: "" });
+  const [seedAssetsByPlatform, setSeedAssetsByPlatform] = useState<Record<Platform, string>>({ X: "", THREADS: "" });
+  const [seedNoGoByPlatform, setSeedNoGoByPlatform] = useState<Record<Platform, string>>({ X: "", THREADS: "" });
+
   const [suggested, setSuggested] = useState<SuggestedTheme[]>([]);
   const [approved, setApproved] = useState<ThemeItem[]>([]);
 
@@ -78,6 +82,38 @@ export default function ThemesPage() {
       window.localStorage.setItem("lastWorkspaceId", workspaceId.trim());
     }
   }, [workspaceId]);
+
+  useEffect(() => {
+    const id = String(workspaceId ?? "").trim();
+    if (!id) return;
+    const key = `themesSeed:${id}:${platform}`;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as any;
+      const goal = String(parsed?.goal ?? "");
+      const assets = String(parsed?.assets ?? "");
+      const noGo = String(parsed?.noGo ?? "");
+      setSeedGoalByPlatform((p) => ({ ...p, [platform]: goal }));
+      setSeedAssetsByPlatform((p) => ({ ...p, [platform]: assets }));
+      setSeedNoGoByPlatform((p) => ({ ...p, [platform]: noGo }));
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform, workspaceId]);
+
+  useEffect(() => {
+    const id = String(workspaceId ?? "").trim();
+    if (!id) return;
+    const key = `themesSeed:${id}:${platform}`;
+    const payload = {
+      goal: seedGoalByPlatform[platform],
+      assets: seedAssetsByPlatform[platform],
+      noGo: seedNoGoByPlatform[platform],
+    };
+    window.localStorage.setItem(key, JSON.stringify(payload));
+  }, [platform, seedAssetsByPlatform, seedGoalByPlatform, seedNoGoByPlatform, workspaceId]);
 
   useEffect(() => {
     let canceled = false;
@@ -263,12 +299,22 @@ export default function ThemesPage() {
     setResult("");
 
     try {
+      const goal = String(seedGoalByPlatform[platform] ?? "").trim();
+      const assets = String(seedAssetsByPlatform[platform] ?? "").trim();
+      const noGo = String(seedNoGoByPlatform[platform] ?? "").trim();
+      const seedLines = [
+        goal ? `狙い: ${goal}` : "",
+        assets ? `強み/実績/商品: ${assets}` : "",
+        noGo ? `NG: ${noGo}` : "",
+      ].filter(Boolean);
+      const seed = seedLines.join("\n");
+
       const res = await fetch(
         `/api/workspaces/${encodeURIComponent(workspaceId)}/themes/suggest?platform=${encodeURIComponent(platform)}`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ count: 5 }),
+          body: JSON.stringify({ count: 5, seed }),
         },
       );
       const json = (await res.json().catch(() => null)) as any;
@@ -394,6 +440,40 @@ export default function ThemesPage() {
         </div>
 
         <div className="mt-4">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+            <div className="text-sm font-semibold">提案の条件（{platform}）</div>
+            <div className="mt-1 text-xs text-zinc-600">ここを埋めるほど、テーマ案がブレにくくなります。</div>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label className="space-y-1">
+                <div className="text-xs text-zinc-700">狙い（何を発信したい？）</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={seedGoalByPlatform[platform]}
+                  onChange={(e) => setSeedGoalByPlatform((p) => ({ ...p, [platform]: e.target.value }))}
+                  placeholder={platform === "X" ? "例: 個人開発を継続するコツ" : "例: 体験談で共感を作りたい"}
+                />
+              </label>
+              <label className="space-y-1">
+                <div className="text-xs text-zinc-700">強み/実績/商品（任意）</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={seedAssetsByPlatform[platform]}
+                  onChange={(e) => setSeedAssetsByPlatform((p) => ({ ...p, [platform]: e.target.value }))}
+                  placeholder="例: 週3投稿を半年継続 / 自社プロダクト"
+                />
+              </label>
+              <label className="space-y-1">
+                <div className="text-xs text-zinc-700">NG（任意）</div>
+                <input
+                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                  value={seedNoGoByPlatform[platform]}
+                  onChange={(e) => setSeedNoGoByPlatform((p) => ({ ...p, [platform]: e.target.value }))}
+                  placeholder="例: 煽り/断定/上から目線"
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="text-sm text-zinc-600">提案から選んで確定へ。確定は保存されます。</div>
             <div className="flex items-center gap-2">
