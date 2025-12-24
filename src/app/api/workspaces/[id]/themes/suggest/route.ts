@@ -28,6 +28,32 @@ function isPlatform(value: unknown): value is Platform {
   return value === "X" || value === "THREADS";
 }
 
+function summarizeAudience(audience: unknown) {
+  const a = audience && typeof audience === "object" ? (audience as Record<string, unknown>) : {};
+  const who = String((a as any).who ?? "").trim();
+  const situation = String((a as any).situation ?? "").trim();
+  const pain = String((a as any).pain ?? "").trim();
+  const desired = String((a as any).desired ?? "").trim();
+  const noGo = String((a as any)["no-go"] ?? (a as any).noGo ?? "").trim();
+
+  const parts = [
+    who ? `対象: ${who}` : "",
+    situation ? `状況: ${situation}` : "",
+    pain ? `悩み: ${pain}` : "",
+    desired ? `理想: ${desired}` : "",
+    noGo ? `NG: ${noGo}` : "",
+  ].filter(Boolean);
+
+  return {
+    who,
+    situation,
+    pain,
+    desired,
+    noGo,
+    text: parts.join(" / "),
+  };
+}
+
 async function generateThemeVariantsWithOpenAI(args: {
   platform: Platform;
   seed: string;
@@ -73,6 +99,8 @@ async function generateThemeVariantsWithOpenAI(args: {
       "Each theme should be a short Japanese phrase (max 40 chars).",
       "Themes must be mutually distinct and cover different angles.",
       "Themes should be actionable and lead to concrete posts.",
+      "The audience is the PRIMARY constraint. Interpret seed through the audience context; do not generate generic topics unrelated to the audience.",
+      "If audience.who is present, ensure the themes clearly fit that person. If the audience implies a specific domain (e.g., job hunting), keep the themes within that domain.",
       "Optimize for the provided audience (who/situation/pain/desired/no-go).",
       "Respect audience no-go.",
     ],
@@ -163,11 +191,23 @@ export async function POST(req: Request, ctx: { params: Promise<{ id?: string }>
     ]);
 
     const audience = (persona as any)?.profile?.audience ?? {};
+    const audienceSummary = summarizeAudience(audience);
 
     if (!useOpenAI) {
       const base = seed || "テーマ";
       const themes = Array.from({ length: count }).map((_, i) => `${base}（案${i + 1}）`);
-      return NextResponse.json({ ok: true, platform, themes, generator: "mock" });
+      return NextResponse.json({
+        ok: true,
+        platform,
+        themes,
+        generator: "mock",
+        debug: {
+          personaId: personaId || null,
+          genreId: genreId || null,
+          audienceSummary,
+          seed: seed || null,
+        },
+      });
     }
 
     const derivedSeed = seed || "この投稿設計に合うテーマ案";
@@ -183,7 +223,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id?: string }>
       sources: Array.isArray(sources) ? (sources as any) : [],
     });
 
-    return NextResponse.json({ ok: true, platform, themes, generator: "openai" });
+    return NextResponse.json({
+      ok: true,
+      platform,
+      themes,
+      generator: "openai",
+      debug: {
+        personaId: personaId || null,
+        genreId: genreId || null,
+        audienceSummary,
+        seed: derivedSeed,
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
