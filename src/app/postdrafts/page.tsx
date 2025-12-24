@@ -140,6 +140,7 @@ export default function PostDraftsPage() {
   const [workspacesError, setWorkspacesError] = useState<string>("");
 
   const [workspaceIdFromQuery, setWorkspaceIdFromQuery] = useState<string>("");
+  const [platformFromQuery, setPlatformFromQuery] = useState<Platform | "">("");
 
   const [platform, setPlatform] = useState<Platform>("X");
   const [count, setCount] = useState<number>(30);
@@ -191,6 +192,11 @@ export default function PostDraftsPage() {
     const q = new URLSearchParams(window.location.search);
     const fromQuery = String(q.get("workspaceId") ?? "").trim();
     if (fromQuery) setWorkspaceIdFromQuery(fromQuery);
+
+    const platformQuery = String(q.get("platform") ?? "").trim();
+    if (platformQuery === "X" || platformQuery === "THREADS") {
+      setPlatformFromQuery(platformQuery);
+    }
   }, []);
 
   useEffect(() => {
@@ -223,6 +229,11 @@ export default function PostDraftsPage() {
         setWorkspaces(list);
         const next = String(workspaceIdFromQuery || list[0]?.id || "").trim();
         if (next) setWorkspaceId(next);
+
+        const p = String(platformFromQuery ?? "").trim();
+        if (p === "X" || p === "THREADS") {
+          setPlatform(p);
+        }
       })
       .catch((e) => {
         if (canceled) return;

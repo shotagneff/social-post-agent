@@ -187,12 +187,14 @@ export default function ThemesPage() {
 
   const nextLinks = useMemo(() => {
     const id = String(workspaceId ?? "").trim();
-    const q = id ? `?workspaceId=${encodeURIComponent(id)}` : "";
+    const q = id
+      ? `?workspaceId=${encodeURIComponent(id)}&platform=${encodeURIComponent(platform)}`
+      : `?platform=${encodeURIComponent(platform)}`;
     return {
       postDrafts: `/postdrafts${q}`,
       setup: `/setup${q}`,
     };
-  }, [workspaceId]);
+  }, [platform, workspaceId]);
 
   function setTitleAt(i: number, title: string) {
     setApproved((prev) => {

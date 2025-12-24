@@ -1349,10 +1349,11 @@ export default function SetupPage() {
                   const r = await generateSlots();
                   if (!r) return;
                   if (r.created <= 0 && r.requested <= 0) return;
-                  router.push(`/postdrafts?workspaceId=${encodeURIComponent(workspaceId)}`);
+                  const preferred = postingTargets.includes("X") ? "X" : postingTargets.includes("THREADS") ? "THREADS" : "X";
+                  router.push(`/themes?workspaceId=${encodeURIComponent(workspaceId)}&platform=${encodeURIComponent(preferred)}`);
                 }}
               >
-                {policySaving || slotGenerating ? "実行中..." : "保存して投稿枠を生成 → 大量生成へ"}
+                {policySaving || slotGenerating ? "実行中..." : "保存して投稿枠を生成 → テーマ設計へ"}
               </button>
 
               <button
