@@ -358,7 +358,7 @@ export async function POST(req: Request) {
     const count = Math.max(1, Math.min(200, Number(body.count ?? 30) || 30));
     const theme = String(body.theme ?? "").trim() || "無題";
     const useOpenAI = body.useOpenAI === undefined ? true : Boolean(body.useOpenAI);
-    const audience = body.audience ?? {};
+    const audienceFromBody = body.audience;
 
     const [settings, sourcesCount] = await Promise.all([
       prismaAny.workspaceSettings.findUnique({
@@ -387,6 +387,11 @@ export async function POST(req: Request) {
         select: { platform: true, handle: true, weight: true, memo: true },
       }),
     ]);
+
+    const audience =
+      audienceFromBody !== undefined
+        ? audienceFromBody
+        : (persona as any)?.profile?.audience ?? {};
 
     let generator: "openai" | "mock" = "mock";
     let llmError: string | null = null;
