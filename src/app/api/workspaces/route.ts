@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const workspaces = await prisma.workspace.findMany({
+    const rows = await prisma.workspace.findMany({
       orderBy: { createdAt: "desc" },
       take: 50,
       select: {
@@ -15,9 +15,25 @@ export async function GET() {
         settings: {
           select: {
             timezone: true,
+            postingTargets: true,
           },
         },
       },
+    });
+
+    const workspaces = rows.map((w) => {
+      const timezone = String(w.settings?.timezone ?? "").trim();
+      const rawTargets = w.settings?.postingTargets;
+      const postingTargets = Array.isArray(rawTargets)
+        ? rawTargets.filter((p): p is "X" | "THREADS" => p === "X" || p === "THREADS")
+        : [];
+      return {
+        id: w.id,
+        name: w.name,
+        createdAt: w.createdAt,
+        timezone,
+        postingTargets,
+      };
     });
 
     return NextResponse.json({ ok: true, workspaces });

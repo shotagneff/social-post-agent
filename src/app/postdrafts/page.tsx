@@ -9,6 +9,7 @@ type WorkspaceItem = {
   id: string;
   name: string;
   timezone: string;
+  postingTargets?: Platform[];
 };
 
 type PostDraftItem = {
@@ -156,6 +157,23 @@ export default function PostDraftsPage() {
   const [detailNotice, setDetailNotice] = useState<string>("");
 
   const canRun = Boolean(workspaceId.trim());
+
+  const selectedWorkspace = useMemo(() => {
+    const id = String(workspaceId ?? "").trim();
+    return workspaces.find((w) => w.id === id) ?? null;
+  }, [workspaceId, workspaces]);
+
+  const allowedPlatforms = useMemo<Platform[]>(() => {
+    const raw = selectedWorkspace?.postingTargets;
+    const list = Array.isArray(raw) ? raw.filter((p): p is Platform => p === "X" || p === "THREADS") : [];
+    return list.length > 0 ? list : ["X", "THREADS"];
+  }, [selectedWorkspace]);
+
+  useEffect(() => {
+    if (!allowedPlatforms.includes(platform)) {
+      setPlatform(allowedPlatforms[0] ?? "X");
+    }
+  }, [allowedPlatforms, platform]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -638,9 +656,10 @@ export default function PostDraftsPage() {
                 className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                 value={platform}
                 onChange={(e) => setPlatform(e.target.value as Platform)}
+                disabled={allowedPlatforms.length <= 1}
               >
-                <option value="X">X</option>
-                <option value="THREADS">Threads</option>
+                {allowedPlatforms.includes("X") ? <option value="X">X（開発中）</option> : null}
+                {allowedPlatforms.includes("THREADS") ? <option value="THREADS">Threads</option> : null}
               </select>
             </label>
 

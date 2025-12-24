@@ -714,7 +714,7 @@ export default function SetupPage() {
                         checked={postingTargets.includes("X")}
                         onChange={() => togglePostingTarget("X")}
                       />
-                      X
+                      X（開発中）
                     </label>
                     <label className="flex items-center gap-2">
                       <input
