@@ -66,7 +66,7 @@ type SetupStep =
 function stepTitle(step: SetupStep) {
   switch (step) {
     case "workspace":
-      return "1. 投稿先";
+      return "1. 投稿設計";
     case "persona":
       return "2. ペルソナ";
     case "narrator":
@@ -201,7 +201,7 @@ function addDaysYmd(ymd: string, days: number) {
 
 export default function SetupPage() {
   const router = useRouter();
-  const [workspaceName, setWorkspaceName] = useState("マイ投稿先");
+  const [workspaceName, setWorkspaceName] = useState("マイ投稿設計");
   const [timezone, setTimezone] = useState("Asia/Tokyo");
   const [postingTargets, setPostingTargets] = useState<Platform[]>(["X"]);
 
@@ -366,7 +366,7 @@ export default function SetupPage() {
   ];
   const currentIndex = Math.max(0, stepOrder.indexOf(step));
   const stepLabels = [
-    "投稿先",
+    "投稿設計",
     "ペルソナ",
     "語り手",
     "フォーマット",
@@ -623,7 +623,7 @@ export default function SetupPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">初期セットアップ</h1>
-          <div className="mt-1 text-sm text-zinc-600">投稿先の作成→投稿枠の生成までを1画面で進めます。</div>
+          <div className="mt-1 text-sm text-zinc-600">投稿設計の作成→投稿枠の生成までを1画面で進めます。</div>
         </div>
         <Link href="/postdrafts" className="spa-button-secondary">
           PostDraftへ
@@ -631,7 +631,7 @@ export default function SetupPage() {
       </div>
 
       <div className="spa-card p-4 text-sm text-zinc-700">
-        まずは投稿先を作成します。完了したら /threads/connect で連携し、/postdrafts で投稿案を作成→確定へ進みます。
+        まずは投稿設計を作成します。完了したら /threads/connect で連携し、/postdrafts で投稿案を作成→確定へ進みます。
       </div>
 
       <div className="spa-card p-4 text-sm">
@@ -643,7 +643,7 @@ export default function SetupPage() {
 
       {step === "workspace" ? (
           <div className="spa-card p-6 space-y-3">
-            <div className="text-sm font-medium">投稿先</div>
+            <div className="text-sm font-medium">投稿設計</div>
             {workspacesLoading ? <div className="text-xs text-zinc-600">読み込み中...</div> : null}
             {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
 
@@ -655,13 +655,13 @@ export default function SetupPage() {
                     checked={useExistingWorkspace}
                     onChange={(e) => setUseExistingWorkspace(e.target.checked)}
                   />
-                  既存の投稿先を使う（おすすめ）
+                  既存の投稿設計を使う（おすすめ）
                 </label>
 
                 {useExistingWorkspace ? (
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <label className="space-y-1">
-                      <div className="text-sm font-medium">投稿先を選択</div>
+                      <div className="text-sm font-medium">投稿設計を選択</div>
                       <select
                         className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                         value={selectedExistingWorkspaceId}
@@ -680,7 +680,7 @@ export default function SetupPage() {
                         disabled={!selectedExistingWorkspaceId.trim()}
                         onClick={useSelectedWorkspace}
                       >
-                        この投稿先で続ける
+                        この投稿設計で続ける
                       </button>
                     </div>
                   </div>
@@ -692,7 +692,7 @@ export default function SetupPage() {
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <label className="space-y-1">
-                    <div className="text-sm font-medium">投稿先の名前</div>
+                    <div className="text-sm font-medium">投稿設計の名前</div>
                     <input
                       className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                       value={workspaceName}
@@ -710,7 +710,7 @@ export default function SetupPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">投稿先（テスト用）</div>
+                  <div className="text-sm font-medium">投稿先（SNS / テスト用）</div>
                   <div className="flex gap-3 text-sm">
                     <label className="flex items-center gap-2">
                       <input
@@ -1097,11 +1097,11 @@ export default function SetupPage() {
           <div className="spa-card p-6 space-y-3">
             <div className="text-sm font-medium">確認</div>
             <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">
-              <div className="text-xs text-zinc-600">投稿先の名前</div>
+              <div className="text-xs text-zinc-600">投稿設計の名前</div>
               <div className="font-medium">{workspaceName}</div>
               <div className="mt-2 text-xs text-zinc-600">タイムゾーン</div>
               <div className="font-medium">{timezone}</div>
-              <div className="mt-2 text-xs text-zinc-600">投稿先</div>
+              <div className="mt-2 text-xs text-zinc-600">投稿先（SNS）</div>
               <div className="font-medium">{postingTargets.join(", ")}</div>
               <div className="mt-2 text-xs text-zinc-600">語り手</div>
               <div className="font-medium">
@@ -1150,13 +1150,8 @@ export default function SetupPage() {
                   setStep("workspace");
                 }}
               >
-                新しい投稿先を作る
+                新しい投稿設計を作る
               </button>
-            </div>
-
-            <div className="rounded-xl border bg-zinc-50/60 p-3 text-sm">
-              <div className="text-xs text-zinc-600">workspaceId（表示のみ）</div>
-              <div className="mt-1 font-mono text-xs text-zinc-800">{workspaceId}</div>
             </div>
 
             <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
