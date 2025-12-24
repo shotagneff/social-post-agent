@@ -969,9 +969,10 @@ export default function SetupPage() {
             <div className="rounded-xl border border-zinc-200 bg-white p-3 text-xs text-zinc-700 space-y-1">
               <div className="font-medium">入力形式（1行=1アカウント）</div>
               <div className="font-mono">PLATFORM,handle,weight,memo</div>
-              <div className="text-zinc-600">memo は「書き分けたい癖」を短く書くと効きます。</div>
-              <div className="text-zinc-600">例: 『結論→理由→一言』『箇条書き多め』『短文テンポ』『問いかけで締める』</div>
-              <div className="text-zinc-600">weight は優先度（大きいほど参照されやすい）です。空でもOK。</div>
+              <div className="text-zinc-600">PLATFORM: X / THREADS（どっちのアカウントか）</div>
+              <div className="text-zinc-600">handle: @から始まるID（例: @example）</div>
+              <div className="text-zinc-600">weight: 重要度（数字が大きいほど優先して参考にします。空でもOK）</div>
+              <div className="text-zinc-600">memo: その人っぽさ（文章の癖）を一言で（例: 結論→理由→一言 / 箇条書き多め / 短文テンポ / 問いかけで締める）</div>
             </div>
             <div className="space-y-2">
               <div className="grid grid-cols-12 gap-2 text-xs text-zinc-600">
@@ -1313,6 +1314,7 @@ export default function SetupPage() {
                     <div className="text-sm font-medium">最小間隔（分）</div>
                     <div className="rounded bg-white px-2 py-0.5 text-[11px] text-zinc-700">任意</div>
                   </div>
+                  <div className="text-xs text-zinc-600">投稿と投稿のあいだを最低でもこの分だけ空けます（例: 90分）。</div>
                   <input
                     className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                     type="number"
@@ -1326,6 +1328,7 @@ export default function SetupPage() {
                     <div className="text-sm font-medium">ジッター（分）</div>
                     <div className="rounded bg-white px-2 py-0.5 text-[11px] text-zinc-700">任意</div>
                   </div>
+                  <div className="text-xs text-zinc-600">投稿時間を少しだけランダムにずらします（例: 15分なら±15分の範囲で変動）。</div>
                   <input
                     className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                     type="number"
