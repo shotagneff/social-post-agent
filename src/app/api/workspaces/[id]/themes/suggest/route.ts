@@ -96,7 +96,9 @@ async function generateThemeVariantsWithOpenAI(args: {
       "Return ONLY valid JSON.",
       "Do not include markdown.",
       `Generate exactly ${args.count} themes for social media posting.`,
-      "Each theme should be a short Japanese phrase (max 40 chars).",
+      `Each theme should be a Japanese phrase with enough detail (min 18 chars, max ${
+        args.platform === "THREADS" ? 80 : 60
+      } chars).`,
       "Themes must be mutually distinct and cover different angles.",
       "Themes should be actionable and lead to concrete posts.",
       "The audience is the PRIMARY constraint. Interpret seed through the audience context; do not generate generic topics unrelated to the audience.",

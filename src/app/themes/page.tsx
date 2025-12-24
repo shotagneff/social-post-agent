@@ -454,21 +454,21 @@ export default function ThemesPage() {
                 />
               </label>
               <label className="space-y-1">
-                <div className="text-xs text-zinc-700">強み/実績/商品（任意）</div>
+                <div className="text-xs text-zinc-700">具体ネタ（例/体験/数字/テンプレ）（任意）</div>
                 <input
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                   value={seedAssetsByPlatform[platform]}
                   onChange={(e) => setSeedAssetsByPlatform((p) => ({ ...p, [platform]: e.target.value }))}
-                  placeholder="例: 週3投稿を半年継続 / 自社プロダクト"
+                  placeholder="例: よくある失敗TOP3 / チェックリスト / 30秒テンプレ"
                 />
               </label>
               <label className="space-y-1">
-                <div className="text-xs text-zinc-700">NG（任意）</div>
+                <div className="text-xs text-zinc-700">避けたい言い方・方向（任意）</div>
                 <input
                   className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                   value={seedNoGoByPlatform[platform]}
                   onChange={(e) => setSeedNoGoByPlatform((p) => ({ ...p, [platform]: e.target.value }))}
-                  placeholder="例: 煽り/断定/上から目線"
+                  placeholder="例: 精神論/抽象語だけ/煽り"
                 />
               </label>
             </div>
