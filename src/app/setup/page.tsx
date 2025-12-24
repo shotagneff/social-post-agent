@@ -102,48 +102,6 @@ type AudienceProfile = {
   noGo: string;
 };
 
-type AudiencePreset = {
-  key: string;
-  label: string;
-  profile: AudienceProfile;
-};
-
-const AUDIENCE_PRESETS: AudiencePreset[] = [
-  {
-    key: "indie-dev-beginner",
-    label: "個人開発（初心者）",
-    profile: {
-      who: "個人開発を始めたばかりのエンジニア（初級）",
-      situation: "何を作るか迷って手が止まっている",
-      pain: "失敗が怖くて着手できない/時間がない",
-      desired: "今日やる1手が決まり、次の行動に移れる",
-      noGo: "煽り/根性論/断定/バズ狙い",
-    },
-  },
-  {
-    key: "biz-worker-mid",
-    label: "会社員（実務改善）",
-    profile: {
-      who: "忙しい会社員（中級）。業務改善に興味はあるが時間がない",
-      situation: "やるべきことが多く、優先順位が決められない",
-      pain: "成果が見えない/相談相手がいない/やり方が曖昧",
-      desired: "判断軸と最小アクションが手に入り、明日試せる",
-      noGo: "抽象論だけ/長文すぎ/説教っぽい",
-    },
-  },
-  {
-    key: "job-change",
-    label: "転職・キャリア",
-    profile: {
-      who: "転職を考え始めた実務者（初〜中級）",
-      situation: "何を準備すべきか分からない/時間が限られている",
-      pain: "現状維持が怖い/自信がない/情報過多",
-      desired: "次の一歩（学習/職務経歴/面接対策）が具体化する",
-      noGo: "煽り/不安商法/根拠ない断定",
-    },
-  },
-];
-
 type FormatPreset = {
   key: string;
   label: string;
@@ -254,10 +212,10 @@ export default function SetupPage() {
   const [useExistingWorkspace, setUseExistingWorkspace] = useState<boolean>(false);
   const [selectedExistingWorkspaceId, setSelectedExistingWorkspaceId] = useState<string>("");
 
-  const [personaJson, setPersonaJson] = useState(
+  const [personaJson, setPersonaJson] = useState<string>(
     JSON.stringify(
       {
-        position: "",
+        name: "",
         experience: "",
         beliefs: [],
         audience: {
@@ -277,12 +235,11 @@ export default function SetupPage() {
     ),
   );
 
-  const [audiencePresetKey, setAudiencePresetKey] = useState<string>(AUDIENCE_PRESETS[0]?.key ?? "indie-dev-beginner");
-  const [audienceWho, setAudienceWho] = useState<string>(AUDIENCE_PRESETS[0]?.profile.who ?? "");
-  const [audienceSituation, setAudienceSituation] = useState<string>(AUDIENCE_PRESETS[0]?.profile.situation ?? "");
-  const [audiencePain, setAudiencePain] = useState<string>(AUDIENCE_PRESETS[0]?.profile.pain ?? "");
-  const [audienceDesired, setAudienceDesired] = useState<string>(AUDIENCE_PRESETS[0]?.profile.desired ?? "");
-  const [audienceNoGo, setAudienceNoGo] = useState<string>(AUDIENCE_PRESETS[0]?.profile.noGo ?? "");
+  const [audienceWho, setAudienceWho] = useState<string>("");
+  const [audienceSituation, setAudienceSituation] = useState<string>("");
+  const [audiencePain, setAudiencePain] = useState<string>("");
+  const [audienceDesired, setAudienceDesired] = useState<string>("");
+  const [audienceNoGo, setAudienceNoGo] = useState<string>("");
 
   const audienceProfile: AudienceProfile = useMemo(() => {
     return {
@@ -371,15 +328,6 @@ export default function SetupPage() {
   const [slotGenerating, setSlotGenerating] = useState(false);
   const [slotResult, setSlotResult] = useState<string>("");
 
-  const personaJsonValid = useMemo(() => {
-    try {
-      JSON.parse(personaJson);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [personaJson]);
-
   const genreJsonValid = useMemo(() => {
     if (!String(genreKey ?? "").trim()) return true;
     try {
@@ -391,14 +339,13 @@ export default function SetupPage() {
   }, [genreJson, genreKey]);
 
   const canGoNextWorkspace = Boolean(workspaceName.trim() && timezone.trim());
-  const canGoNextPersona = useMemo(() => {
-    try {
-      const parsed = JSON.parse(personaJson);
-      return typeof parsed === "object" && parsed !== null;
-    } catch {
-      return false;
-    }
-  }, [personaJson]);
+  const canGoNextPersona = Boolean(
+    String(audienceWho ?? "").trim() ||
+      String(audienceDesired ?? "").trim() ||
+      String(audienceSituation ?? "").trim() ||
+      String(audiencePain ?? "").trim() ||
+      String(audienceNoGo ?? "").trim(),
+  );
   const canGoNextNarrator = useMemo(() => {
     const hasRole = String(narratorRoleOrPosition ?? "").trim().length > 0;
     const hasNotes = String(narratorNotes ?? "").trim().length > 0;
@@ -811,42 +758,18 @@ export default function SetupPage() {
 
         {step === "persona" ? (
           <div className="spa-card p-6 space-y-3">
-            <div className="text-sm font-medium">ペルソナ（JSON）</div>
+            <div className="text-sm font-medium">ペルソナ</div>
             <div className="text-xs text-zinc-600">
-              投稿文の口調・前提・NG表現などを設定します（まずは空のままでOK）。
+              誰に向けて書くか（対象/状況/悩み/理想/NG）をセットします。
             </div>
 
             <div className="rounded-xl border border-zinc-200 bg-white p-3 space-y-3">
               <div className="text-sm font-medium">ターゲット（audience）</div>
-              <div className="text-xs text-zinc-600">誰に向けて書くか（who/situation/pain/desired/no-go）をセットします。</div>
-
-              <label className="space-y-2">
-                <div className="text-xs text-zinc-700">プリセット</div>
-                <select
-                  className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                  value={audiencePresetKey}
-                  onChange={(e) => {
-                    const key = e.target.value;
-                    setAudiencePresetKey(key);
-                    const preset = AUDIENCE_PRESETS.find((p) => p.key === key) ?? AUDIENCE_PRESETS[0];
-                    setAudienceWho(preset?.profile.who ?? "");
-                    setAudienceSituation(preset?.profile.situation ?? "");
-                    setAudiencePain(preset?.profile.pain ?? "");
-                    setAudienceDesired(preset?.profile.desired ?? "");
-                    setAudienceNoGo(preset?.profile.noGo ?? "");
-                  }}
-                >
-                  {AUDIENCE_PRESETS.map((p) => (
-                    <option key={p.key} value={p.key}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="text-xs text-zinc-600">誰に向けて書くか（対象/状況/悩み/理想/NG）をセットします。</div>
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="space-y-1">
-                  <div className="text-xs text-zinc-700">who</div>
+                  <div className="text-xs text-zinc-700">対象（誰）</div>
                   <input
                     className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                     value={audienceWho}
@@ -855,7 +778,7 @@ export default function SetupPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-zinc-700">desired</div>
+                  <div className="text-xs text-zinc-700">理想（どうなりたい）</div>
                   <input
                     className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                     value={audienceDesired}
@@ -864,7 +787,7 @@ export default function SetupPage() {
                 </label>
 
                 <label className="space-y-1 md:col-span-2">
-                  <div className="text-xs text-zinc-700">situation</div>
+                  <div className="text-xs text-zinc-700">状況（いま）</div>
                   <input
                     className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                     value={audienceSituation}
@@ -873,7 +796,7 @@ export default function SetupPage() {
                 </label>
 
                 <label className="space-y-1 md:col-span-2">
-                  <div className="text-xs text-zinc-700">pain</div>
+                  <div className="text-xs text-zinc-700">悩み（困りごと）</div>
                   <input
                     className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                     value={audiencePain}
@@ -882,7 +805,7 @@ export default function SetupPage() {
                 </label>
 
                 <label className="space-y-1 md:col-span-2">
-                  <div className="text-xs text-zinc-700">no-go</div>
+                  <div className="text-xs text-zinc-700">NG（避けたいこと）</div>
                   <input
                     className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                     value={audienceNoGo}
@@ -892,23 +815,19 @@ export default function SetupPage() {
               </div>
             </div>
 
-            <textarea
-              className="w-full rounded-xl border border-zinc-200 bg-white p-3 font-mono text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-              rows={12}
-              value={personaJson}
-              onChange={(e) => setPersonaJson(e.target.value)}
-            />
-            {!personaJsonValid ? (
-              <div className="text-xs text-red-700">JSONの形式が正しくありません。</div>
-            ) : null}
-
             <div className="flex items-center justify-between gap-2">
               <button className="spa-button-secondary" onClick={() => setStep("workspace")}>
                 戻る
               </button>
               <button
                 className="spa-button-primary disabled:opacity-50"
-                disabled={!canGoNextPersona}
+                disabled={
+                  !audienceWho.trim() &&
+                  !audienceDesired.trim() &&
+                  !audienceSituation.trim() &&
+                  !audiencePain.trim() &&
+                  !audienceNoGo.trim()
+                }
                 onClick={() => setStep("narrator")}
               >
                 次へ
