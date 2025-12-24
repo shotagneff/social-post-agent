@@ -630,10 +630,6 @@ export default function SetupPage() {
         </Link>
       </div>
 
-      <div className="spa-card p-4 text-sm text-zinc-700">
-        まずは投稿設計を作成します。完了したら /threads/connect で連携し、/postdrafts で投稿案を作成→確定へ進みます。
-      </div>
-
       <div className="spa-card p-4 text-sm">
         <div className="font-medium">いまのステップ: {stepTitle(step)}</div>
         <div className="mt-1 text-xs text-zinc-600">すべて入力し終わったら確認画面で「セットアップを実行」できます。</div>
