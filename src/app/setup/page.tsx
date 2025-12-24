@@ -424,7 +424,7 @@ export default function SetupPage() {
 
           // Keep a sensible default selection, but don't force-jump the user to step 6.
           setWorkspaceId(initial);
-          setResult(`選択中: workspaceId=${initial}`);
+          setResult("");
           setPolicyResult("");
           setSlotResult("");
         }
@@ -457,7 +457,7 @@ export default function SetupPage() {
     const id = String(selectedExistingWorkspaceId ?? "").trim();
     if (!id) return;
     setWorkspaceId(id);
-    setResult(`選択中: workspaceId=${id}`);
+    setResult("");
     setPolicyResult("");
     setSlotResult("");
   }, [selectedExistingWorkspaceId, step, useExistingWorkspace]);
@@ -492,7 +492,7 @@ export default function SetupPage() {
       }
 
       setWorkspaceId(String(json.workspaceId));
-      setResult(`完了: workspaceId=${json.workspaceId}`);
+      setResult("セットアップが完了しました。");
       setPolicyResult("");
       setSlotResult("");
       setStep("scheduling");
@@ -582,7 +582,7 @@ export default function SetupPage() {
     const id = String(selectedExistingWorkspaceId ?? "").trim();
     if (!id) return;
     setWorkspaceId(id);
-    setResult(`選択中: workspaceId=${id}`);
+    setResult("");
     setPolicyResult("");
     setSlotResult("");
     setStep("scheduling");
