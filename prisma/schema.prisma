@@ -71,6 +71,7 @@ model WorkspaceSettings {
   timezone      String
   postingTargets Json    @default(dbgenerated("'[]'::jsonb")) @db.JsonB
   schedulingPolicy Json  @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  themesByPlatform Json  @default(dbgenerated("'{}'::jsonb")) @db.JsonB
   threadsAccessToken String?
   threadsUserId      String?
   threadsTokenExpiresAt DateTime?

@@ -1354,6 +1354,16 @@ export default function SetupPage() {
               >
                 {policySaving || slotGenerating ? "実行中..." : "保存して投稿枠を生成 → 大量生成へ"}
               </button>
+
+              <button
+                className="spa-button-secondary disabled:opacity-50"
+                disabled={!workspaceId.trim()}
+                onClick={() => {
+                  router.push(`/themes?workspaceId=${encodeURIComponent(workspaceId)}&platform=X`);
+                }}
+              >
+                テーマ設計へ
+              </button>
             </div>
 
             {policyResult ? <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">{policyResult}</div> : null}
