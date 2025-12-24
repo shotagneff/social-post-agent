@@ -19,6 +19,11 @@ type ThemeItem = {
   enabled?: boolean;
 };
 
+type SuggestedTheme = {
+  id: string;
+  title: string;
+};
+
 function isPlatform(x: unknown): x is Platform {
   return x === "X" || x === "THREADS";
 }
@@ -48,13 +53,8 @@ export default function ThemesPage() {
 
   const [platform, setPlatform] = useState<Platform>("X");
 
-  const [items, setItems] = useState<ThemeItem[]>([
-    { title: "" },
-    { title: "" },
-    { title: "" },
-    { title: "" },
-    { title: "" },
-  ]);
+  const [suggested, setSuggested] = useState<SuggestedTheme[]>([]);
+  const [approved, setApproved] = useState<ThemeItem[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -167,17 +167,8 @@ export default function ThemesPage() {
           .filter((x) => Boolean(x.title))
           .slice(0, 50);
 
-        if (normalized.length === 0) {
-          setItems([
-            { title: "" },
-            { title: "" },
-            { title: "" },
-            { title: "" },
-            { title: "" },
-          ]);
-        } else {
-          setItems(normalized);
-        }
+        setApproved(normalized);
+        setSuggested([]);
       })
       .catch((e) => {
         if (canceled) return;
@@ -204,7 +195,7 @@ export default function ThemesPage() {
   }, [workspaceId]);
 
   function setTitleAt(i: number, title: string) {
-    setItems((prev) => {
+    setApproved((prev) => {
       const next = prev.slice();
       const cur = next[i] ?? { title: "" };
       next[i] = { ...cur, title };
@@ -213,12 +204,55 @@ export default function ThemesPage() {
   }
 
   function toggleEnabledAt(i: number) {
-    setItems((prev) => {
+    setApproved((prev) => {
       const next = prev.slice();
       const cur = next[i] ?? { title: "" };
       next[i] = { ...cur, enabled: !(cur.enabled === undefined ? true : Boolean(cur.enabled)) };
       return next;
     });
+  }
+
+  function setSuggestedTitleAt(i: number, title: string) {
+    setSuggested((prev) => {
+      const next = prev.slice();
+      const cur = next[i];
+      if (!cur) return prev;
+      next[i] = { ...cur, title };
+      return next;
+    });
+  }
+
+  function approveSuggested(i: number) {
+    setSuggested((prev) => {
+      const picked = prev[i];
+      if (!picked) return prev;
+      const rest = prev.filter((_, idx) => idx !== i);
+      const title = String(picked.title ?? "").trim();
+      if (!title) return rest;
+      setApproved((cur) => {
+        const exists = cur.some((x) => String(x.title ?? "").trim() === title);
+        if (exists) return cur;
+        return [{ id: uuid(), title, enabled: true }, ...cur].slice(0, 50);
+      });
+      return rest;
+    });
+  }
+
+  function moveBackToSuggested(i: number) {
+    setApproved((prev) => {
+      const picked = prev[i];
+      if (!picked) return prev;
+      const rest = prev.filter((_, idx) => idx !== i);
+      const title = String(picked.title ?? "").trim();
+      if (title) {
+        setSuggested((cur) => [{ id: uuid(), title }, ...cur].slice(0, 20));
+      }
+      return rest;
+    });
+  }
+
+  function removeApproved(i: number) {
+    setApproved((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   async function suggest() {
@@ -242,10 +276,8 @@ export default function ThemesPage() {
       }
       const themes = Array.isArray(json.themes) ? (json.themes as any[]) : [];
       const titles = themes.map((x) => String(x ?? "").trim()).filter(Boolean).slice(0, 5);
-      const nextItems: ThemeItem[] = titles.map((t) => ({ id: uuid(), title: t, enabled: true }));
-      while (nextItems.length < 5) nextItems.push({ id: uuid(), title: "", enabled: true });
-      setItems(nextItems);
-      setResult("テーマ案を作成しました。必要なら編集して保存してください。");
+      setSuggested(titles.map((t) => ({ id: uuid(), title: t })));
+      setResult("提案を作成しました。採用して確定に入れてください。");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";
       setResult(`エラー: ${msg}`);
@@ -260,13 +292,13 @@ export default function ThemesPage() {
     setResult("");
 
     try {
-      const payload = items
-        .map((x) => ({
+      const payload = approved
+        .map((x): Required<ThemeItem> => ({
           id: String(x.id ?? "").trim() || uuid(),
           title: String(x.title ?? "").trim(),
           enabled: x.enabled === undefined ? true : Boolean(x.enabled),
         }))
-        .filter((x) => Boolean(x.title))
+        .filter((x) => Boolean(String(x.title ?? "").trim()))
         .slice(0, 50);
 
       const res = await fetch(
@@ -293,7 +325,7 @@ export default function ThemesPage() {
         }))
         .filter((x) => Boolean(x.title))
         .slice(0, 50);
-      setItems(normalized.length ? normalized : [{ title: "" }, { title: "" }, { title: "" }, { title: "" }, { title: "" }]);
+      setApproved(normalized);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";
       setResult(`エラー: ${msg}`);
@@ -306,9 +338,7 @@ export default function ThemesPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">テーマ設計</h1>
-        <div className="mt-1 text-sm text-zinc-600">
-          投稿設計（workspace）ごとに、投稿のテーマを保存します。まずはAIで5案を作って、必要なら編集して保存してください。
-        </div>
+        <div className="mt-1 text-sm text-zinc-600">AIの提案から選んで、確定テーマを保存します。</div>
       </div>
 
       <div className="spa-card p-6">
@@ -338,7 +368,7 @@ export default function ThemesPage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-sm font-semibold">2. プラットフォーム別テーマ</div>
-            <div className="mt-1 text-sm text-zinc-600">X用 / Threads用で分けて保存できます。</div>
+            <div className="mt-1 text-sm text-zinc-600">X用 / Threads用で別管理できます。</div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -363,47 +393,99 @@ export default function ThemesPage() {
 
         <div className="mt-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="text-sm text-zinc-600">保存済みテーマを読み込み、編集できます。</div>
+            <div className="text-sm text-zinc-600">提案から選んで確定へ。確定は保存されます。</div>
             <div className="flex items-center gap-2">
               <button className="spa-button-secondary disabled:opacity-50" disabled={!workspaceId.trim() || suggesting || loading} onClick={suggest}>
                 <span className="inline-flex items-center gap-2">
                   {suggesting ? <Spinner /> : null}
-                  <span>{suggesting ? "作成中..." : "AIで5案を作る"}</span>
+                  <span>{suggesting ? "作成中..." : "AIで提案"}</span>
                 </span>
               </button>
               <button className="spa-button-primary disabled:opacity-50" disabled={!workspaceId.trim() || saving || loading} onClick={save}>
                 <span className="inline-flex items-center gap-2">
                   {saving ? <Spinner /> : null}
-                  <span>{saving ? "保存中..." : "保存"}</span>
+                  <span>{saving ? "保存中..." : "確定を保存"}</span>
                 </span>
               </button>
             </div>
           </div>
 
-          {loading ? (
-            <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 text-sm">読み込み中...</div>
-          ) : (
-            <div className="mt-4 space-y-2">
-              {items.map((it, idx) => (
-                <div key={it.id ?? idx} className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3">
-                  <button
-                    className={`h-9 w-9 rounded-xl border text-sm ${it.enabled === false ? "border-zinc-200 bg-white text-zinc-400" : "border-zinc-900 bg-zinc-900 text-white"}`}
-                    type="button"
-                    onClick={() => toggleEnabledAt(idx)}
-                    title={it.enabled === false ? "無効（クリックで有効）" : "有効（クリックで無効）"}
-                  >
-                    {it.enabled === false ? "-" : "✓"}
-                  </button>
-                  <input
-                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                    value={it.title}
-                    onChange={(e) => setTitleAt(idx, e.target.value)}
-                    placeholder={idx < 5 ? `テーマ案${idx + 1}` : "テーマ"}
-                  />
+          {loading ? <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 text-sm">読み込み中...</div> : null}
+
+          {!loading ? (
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold">提案</div>
+                  <div className="text-xs text-zinc-600">{suggested.length}件</div>
                 </div>
-              ))}
+                <div className="mt-3 space-y-2">
+                  {suggested.length === 0 ? (
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+                      「AIで提案」で候補を作ります。
+                    </div>
+                  ) : null}
+                  {suggested.map((s, idx) => (
+                    <div key={s.id} className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3">
+                      <button
+                        className="h-9 w-16 rounded-xl border border-zinc-900 bg-zinc-900 text-sm text-white"
+                        type="button"
+                        onClick={() => approveSuggested(idx)}
+                      >
+                        承認
+                      </button>
+                      <input
+                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                        value={s.title}
+                        onChange={(e) => setSuggestedTitleAt(idx, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold">確定</div>
+                  <div className="text-xs text-zinc-600">{approved.length}件</div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {approved.length === 0 ? (
+                    <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-600">
+                      提案から「承認」するとここに入ります。
+                    </div>
+                  ) : null}
+                  {approved.map((it, idx) => (
+                    <div key={it.id ?? idx} className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          className={`h-9 w-16 rounded-xl border text-sm ${it.enabled === false ? "border-zinc-200 bg-white text-zinc-400" : "border-zinc-900 bg-zinc-900 text-white"}`}
+                          type="button"
+                          onClick={() => toggleEnabledAt(idx)}
+                          title={it.enabled === false ? "無効（クリックで有効）" : "有効（クリックで無効）"}
+                        >
+                          {it.enabled === false ? "無効" : "有効"}
+                        </button>
+                        <input
+                          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                          value={it.title}
+                          onChange={(e) => setTitleAt(idx, e.target.value)}
+                        />
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <button className="spa-button-secondary" type="button" onClick={() => moveBackToSuggested(idx)}>
+                          戻す
+                        </button>
+                        <button className="spa-button-secondary" type="button" onClick={() => removeApproved(idx)}>
+                          削除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          )}
+          ) : null}
 
           {result ? <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-3 text-sm">{result}</div> : null}
         </div>
