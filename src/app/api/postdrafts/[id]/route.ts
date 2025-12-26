@@ -14,7 +14,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id?: string }>
   try {
     const { id } = await ctx.params;
     if (!id) {
-      return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "id is required" },
+        { status: 400, headers: { "content-type": "application/json; charset=utf-8" } },
+      );
     }
 
     const postDraft = await prismaAny.postDraft.findUnique({
@@ -42,13 +45,22 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id?: string }>
     });
 
     if (!postDraft) {
-      return NextResponse.json({ ok: false, error: "postDraft not found" }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, error: "postDraft not found" },
+        { status: 404, headers: { "content-type": "application/json; charset=utf-8" } },
+      );
     }
 
-    return NextResponse.json({ ok: true, postDraft });
+    return NextResponse.json(
+      { ok: true, postDraft },
+      { headers: { "content-type": "application/json; charset=utf-8" } },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: message },
+      { status: 500, headers: { "content-type": "application/json; charset=utf-8" } },
+    );
   }
 }
 
@@ -56,7 +68,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id?: string }
   try {
     const { id } = await ctx.params;
     if (!id) {
-      return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "id is required" },
+        { status: 400, headers: { "content-type": "application/json; charset=utf-8" } },
+      );
     }
 
     const body = (await req.json().catch(() => ({}))) as PatchBody;
@@ -64,7 +79,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id?: string }
     const nextThreadReplies = body.threadReplies;
 
     if (nextBody !== undefined && typeof nextBody !== "string") {
-      return NextResponse.json({ ok: false, error: "body must be string" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "body must be string" },
+        { status: 400, headers: { "content-type": "application/json; charset=utf-8" } },
+      );
     }
 
     if (nextThreadReplies !== undefined) {
@@ -74,7 +92,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id?: string }
       ) {
         return NextResponse.json(
           { ok: false, error: "threadReplies must be string[]" },
-          { status: 400 },
+          { status: 400, headers: { "content-type": "application/json; charset=utf-8" } },
         );
       }
     }
@@ -99,9 +117,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id?: string }
       },
     });
 
-    return NextResponse.json({ ok: true, postDraft });
+    return NextResponse.json(
+      { ok: true, postDraft },
+      { headers: { "content-type": "application/json; charset=utf-8" } },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: message },
+      { status: 500, headers: { "content-type": "application/json; charset=utf-8" } },
+    );
   }
 }

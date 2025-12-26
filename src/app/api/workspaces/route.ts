@@ -21,6 +21,21 @@ export async function GET() {
       },
     });
 
+    const ids = rows.map((w) => w.id);
+    const chunkCounts = await prisma.primaryChunk.groupBy({
+      by: ["workspaceId"],
+      where: { workspaceId: { in: ids }, isActive: true },
+      _count: { _all: true },
+    });
+    const chunkCountByWorkspaceId = new Map(chunkCounts.map((r) => [r.workspaceId, r._count._all]));
+
+    const summaryCounts = await prisma.knowledgeSource.groupBy({
+      by: ["workspaceId"],
+      where: { workspaceId: { in: ids }, key: "job_hunting_summary" },
+      _count: { _all: true },
+    });
+    const hasSummaryByWorkspaceId = new Map(summaryCounts.map((r) => [r.workspaceId, r._count._all > 0]));
+
     const workspaces = rows.map((w) => {
       const timezone = String(w.settings?.timezone ?? "").trim();
       const rawTargets = w.settings?.postingTargets;
@@ -33,6 +48,8 @@ export async function GET() {
         createdAt: w.createdAt,
         timezone,
         postingTargets,
+        primaryChunkCount: Number(chunkCountByWorkspaceId.get(w.id) ?? 0),
+        hasKnowledgeSummary: Boolean(hasSummaryByWorkspaceId.get(w.id) ?? false),
       };
     });
 

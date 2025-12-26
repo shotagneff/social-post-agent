@@ -63,6 +63,8 @@ model Workspace {
   drafts    Draft[]
   postDrafts PostDraft[]
   schedulingSlots SchedulingSlot[]
+  knowledgeSources KnowledgeSource[]
+  primaryChunks    PrimaryChunk[]
 }
 
 model WorkspaceSettings {
@@ -259,4 +261,44 @@ model PublishedPost {
   raw           Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
 
   schedule      Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+}
+
+model KnowledgeSource {
+  id          String   @id @default(cuid())
+  workspaceId String
+  key         String
+  title       String?
+  body        String
+  sourceUrl   String?
+  sourceDocId String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, updatedAt])
+}
+
+model PrimaryChunk {
+  id          String   @id @default(cuid())
+  workspaceId String
+  kind        String
+  chunkKey    String
+  chunkIndex  Int
+  title       String?
+  body        String
+  tags        Json     @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  sourceUrl   String?
+  sourceDocId String?
+  sourceFolderId String?
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, chunkKey])
+  @@index([workspaceId, kind, isActive])
+  @@index([workspaceId, updatedAt])
 }

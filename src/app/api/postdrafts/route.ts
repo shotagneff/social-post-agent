@@ -31,7 +31,14 @@ export async function GET(req: Request) {
       },
     });
 
-    return NextResponse.json({ ok: true, postDrafts });
+    return NextResponse.json(
+      { ok: true, postDrafts },
+      {
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+        },
+      },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
