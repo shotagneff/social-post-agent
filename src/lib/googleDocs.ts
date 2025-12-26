@@ -41,7 +41,7 @@ export async function listGoogleDocsInFolder(args: { folderId: string }) {
 
   let pageToken: string | undefined = undefined;
   for (let i = 0; i < 50; i++) {
-    const res = await drive.files.list({
+    const res: any = await drive.files.list({
       q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.document' and trashed=false`,
       fields: "nextPageToken, files(id,name,webViewLink,modifiedTime)",
       pageSize: 1000,
