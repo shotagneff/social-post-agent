@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Platform = "X" | "THREADS";
+type PlatformFilter = "ALL" | Platform;
 
 type WorkspaceItem = {
   id: string;
@@ -103,7 +104,7 @@ function Spinner(props: { className?: string }) {
   );
 }
 
-function Stepper(props: { steps: string[]; currentIndex: number }) {
+function PostDraftStepper(props: { steps: string[]; currentIndex: number }) {
   const { steps, currentIndex } = props;
   return (
     <div className="rounded-2xl border bg-white p-4 shadow-sm">
@@ -143,6 +144,7 @@ export default function PostDraftsPage() {
   const [platformFromQuery, setPlatformFromQuery] = useState<Platform | "">("");
 
   const [platform, setPlatform] = useState<Platform>("X");
+  const [listPlatformFilter, setListPlatformFilter] = useState<PlatformFilter>("ALL");
   const [count, setCount] = useState<number>(30);
   const [theme, setTheme] = useState<string>("テーマ（仮）");
 
@@ -168,8 +170,35 @@ export default function PostDraftsPage() {
   const [detailBody, setDetailBody] = useState<string>("");
   const [detailThreadReplies, setDetailThreadReplies] = useState<string[]>(["", "", "", ""]);
   const [detailNotice, setDetailNotice] = useState<string>("");
+  const [detailFocus, setDetailFocus] = useState<"replies" | null>(null);
+  const detailRepliesRef = useRef<HTMLDivElement | null>(null);
+
+  const [importText, setImportText] = useState<string>("");
+  const [importLimit, setImportLimit] = useState<number>(10);
+  const [importWorking, setImportWorking] = useState(false);
+  const [importError, setImportError] = useState<string>("");
+  const [importNotice, setImportNotice] = useState<string>("");
 
   const canRun = Boolean(workspaceId.trim());
+
+  const importedParts = useMemo(() => {
+    const src = String(importText ?? "").replace(/\r\n/g, "\n").trim();
+    if (!src) return [] as string[];
+
+    const byDelimiter = src
+      .split(/\n\s*---+\s*\n/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (byDelimiter.length >= 2) return byDelimiter;
+
+    const byBlank = src
+      .split(/\n\s*\n\s*\n+/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (byBlank.length >= 2) return byBlank;
+
+    return [src];
+  }, [importText]);
 
   const selectedWorkspace = useMemo(() => {
     const id = String(workspaceId ?? "").trim();
@@ -179,7 +208,7 @@ export default function PostDraftsPage() {
   const allowedPlatforms = useMemo<Platform[]>(() => {
     const raw = selectedWorkspace?.postingTargets;
     const list = Array.isArray(raw) ? raw.filter((p): p is Platform => p === "X" || p === "THREADS") : [];
-    return list.length > 0 ? list : ["X", "THREADS"];
+    return list.length > 0 ? list : ["X"];
   }, [selectedWorkspace]);
 
   useEffect(() => {
@@ -272,7 +301,7 @@ export default function PostDraftsPage() {
     }
   }
 
-  async function openDetail(id: string) {
+  async function openDetail(id: string, focus?: "replies") {
     setDetailOpen(true);
     setDetailLoading(true);
     setDetailSaving(false);
@@ -282,6 +311,7 @@ export default function PostDraftsPage() {
     setDetail(null);
     setDetailBody("");
     setDetailThreadReplies(["", "", "", ""]);
+    setDetailFocus(focus ?? null);
     try {
       const res = await fetch(`/api/postdrafts/${encodeURIComponent(id)}`, { cache: "no-store" });
       const json = (await res.json().catch(() => null)) as any;
@@ -304,6 +334,12 @@ export default function PostDraftsPage() {
         replies[2] ?? "",
         replies[3] ?? "",
       ]);
+
+      if (focus === "replies") {
+        setTimeout(() => {
+          detailRepliesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 0);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";
       setDetailError(`エラー: ${msg}`);
@@ -491,6 +527,45 @@ export default function PostDraftsPage() {
     }
   }
 
+  async function importPastedDrafts() {
+    if (!canRun) return;
+    setImportWorking(true);
+    setImportError("");
+    setImportNotice("");
+
+    setRecentBaselineIds(items.map((x) => x.id));
+    const startedAt = Date.now();
+    const safetyMs = 5 * 60 * 1000;
+    setRecentAfterIso(new Date(startedAt - safetyMs).toISOString());
+    setRecentOnly(true);
+    try {
+      const res = await fetch("/api/postdrafts/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          platform,
+          text: importText,
+          limit: importLimit,
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as any;
+      if (!json?.ok) {
+        setImportError(`エラー: ${json?.error ?? "不明なエラー"}`);
+        return;
+      }
+      const created = Number(json?.created ?? 0) || 0;
+      setImportNotice(`取り込みました: ${created} 件`);
+      setImportText("");
+      await reload();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "不明なエラー";
+      setImportError(`エラー: ${msg}`);
+    } finally {
+      setImportWorking(false);
+    }
+  }
+
 
   const tempCount = useMemo(
     () => items.filter((x) => x.status === "TEMP_SCHEDULED").length,
@@ -508,22 +583,32 @@ export default function PostDraftsPage() {
   );
 
   const visibleItems = useMemo(() => {
-    if (!recentOnly) return items;
+    let base = items;
 
-    const baseline = new Set(recentBaselineIds);
-    if (baseline.size > 0) {
-      return items.filter((it) => !baseline.has(it.id));
+    if (recentOnly) {
+      const baseline = new Set(recentBaselineIds);
+      if (baseline.size > 0) {
+        base = base.filter((it) => !baseline.has(it.id));
+      } else {
+        const after = String(recentAfterIso ?? "").trim();
+        if (after) {
+          const afterMs = new Date(after).getTime();
+          if (Number.isFinite(afterMs)) {
+            base = base.filter((it) => {
+              const t = new Date(it.createdAt).getTime();
+              return Number.isFinite(t) && t >= afterMs;
+            });
+          }
+        }
+      }
     }
 
-    const after = String(recentAfterIso ?? "").trim();
-    if (!after) return items;
-    const afterMs = new Date(after).getTime();
-    if (!Number.isFinite(afterMs)) return items;
-    return items.filter((it) => {
-      const t = new Date(it.createdAt).getTime();
-      return Number.isFinite(t) && t >= afterMs;
-    });
-  }, [items, recentAfterIso, recentBaselineIds, recentOnly]);
+    if (listPlatformFilter !== "ALL") {
+      base = base.filter((it) => it.platform === listPlatformFilter);
+    }
+
+    return base;
+  }, [items, listPlatformFilter, recentAfterIso, recentBaselineIds, recentOnly]);
 
   const visibleTempCount = useMemo(
     () => visibleItems.filter((x) => x.status === "TEMP_SCHEDULED").length,
@@ -587,8 +672,8 @@ export default function PostDraftsPage() {
     return "「直近の実行分のみ表示」がONのため、既存の仮予約（TEMP_SCHEDULED）/確定（CONFIRMED）が隠れている可能性があります。今日の予定が見えない場合はチェックをOFFにしてください。";
   }, [confirmedCount, items.length, recentOnly, tempCount, visibleConfirmedCount, visibleItems.length, visibleTempCount]);
 
-  const stepLabels = ["投稿枠を作る", "大量生成＆仮予約", "確認して確定", "投稿実行"];
-  const currentStepIndex = confirmedCount > 0 ? 3 : tempCount > 0 ? 2 : 1;
+  const stepLabels = ["投稿枠を作る", "取り込んで編集", "確認して確定", "投稿実行"];
+  const currentStepIndex = confirmedCount > 0 ? 3 : tempCount > 0 ? 2 : items.length > 0 ? 2 : 1;
 
   const detailIsDirty = useMemo(() => {
     if (!detail) return false;
@@ -606,17 +691,37 @@ export default function PostDraftsPage() {
     return bodyDirty || repliesDirty;
   }, [detail, detailBody, detailThreadReplies]);
 
+  const threadsBodyTooLong = useMemo(() => {
+    if (!detail) return false;
+    if (detail.platform !== "THREADS") return false;
+    return String(detailBody ?? "").length > 500;
+  }, [detail, detailBody]);
+
+  const threadsRepliesTooLong = useMemo(() => {
+    if (!detail) return false;
+    if (detail.platform !== "THREADS") return false;
+    return detailThreadReplies.some((x) => String(x ?? "").length > 500);
+  }, [detail, detailThreadReplies]);
+
+  const threadsTooLongReason = useMemo(() => {
+    if (!detail) return "";
+    if (detail.platform !== "THREADS") return "";
+    if (!threadsBodyTooLong && !threadsRepliesTooLong) return "";
+    return "Threadsは本文/返信ともに500文字までです。文字数を減らしてください。";
+  }, [detail, threadsBodyTooLong, threadsRepliesTooLong]);
+
   const confirmDisabledReason = useMemo(() => {
     if (!detail) return "";
     if (detailSaving) return "保存中のため確定できません。";
     if (detailConfirming) return "確定処理中です。";
+    if (threadsTooLongReason) return threadsTooLongReason;
     if (detailIsDirty) return "未保存の変更があります。保存してから確定してください。";
     if (detail.status === "CONFIRMED") return "この投稿はすでに確定済みです。";
     if (detail.status !== "TEMP_SCHEDULED") {
       return "まだ仮予約になっていません。先に『大量生成して仮予約を作成』を実行してください（投稿枠が無い場合は /setup で投稿枠を生成）。";
     }
     return "";
-  }, [detail, detailConfirming, detailIsDirty, detailSaving]);
+  }, [detail, detailConfirming, detailIsDirty, detailSaving, threadsTooLongReason]);
 
   return (
     <div className="space-y-6">
@@ -627,122 +732,122 @@ export default function PostDraftsPage() {
         </Link>
       </div>
 
-      <Stepper steps={stepLabels} currentIndex={currentStepIndex} />
+      <PostDraftStepper steps={stepLabels} currentIndex={currentStepIndex} />
 
-      <div className="spa-card p-6 space-y-5">
-          <div className="text-sm font-semibold">2. 大量生成＆仮予約（まずはここ）</div>
-          <div className="text-xs text-zinc-600">
-            ボタンは基本これ1つです。「大量生成→仮予約」まで自動で行い、その後に内容を見て確定します。
+      <div className="spa-card p-6 space-y-4">
+        <div>
+          <div className="text-sm font-semibold">参考投稿を貼り付けて取り込む（おすすめ）</div>
+          <div className="mt-1 text-xs text-zinc-600">
+            外部ツールで作った投稿文をまとめて貼り付けて、PostDraftとして取り込み→詳細で編集→確定できます。
+            区切りは「空行が2つ以上」または「---」の行です。
           </div>
+        </div>
 
-          <label className="flex items-center gap-2 text-xs text-zinc-700">
-            <input
-              type="checkbox"
-              checked={testModeImmediate}
-              onChange={(e) => setTestModeImmediate(e.target.checked)}
-              disabled={!canRun || working}
-            />
-            テストモード: 直近の仮予約も許可（minLeadMinutes=0）
-          </label>
-
-          {testModeImmediate ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-              テストを早く回すためのモードです。本番運用ではOFF推奨です（直近すぎる枠は投稿処理に間に合わない可能性があります）。
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <label className="space-y-2">
+            <div className="text-sm font-medium">投稿先</div>
+            <select
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+              value={workspaceId}
+              onChange={(e) => setWorkspaceId(e.target.value)}
+              disabled={workspacesLoading}
+            >
+              <option value="">選択してください</option>
+              {workspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}（{w.timezone}）
+                </option>
+              ))}
+            </select>
+            {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
+            <div className="text-xs text-zinc-600">
+              {workspaceId ? (
+                <span>
+                  workspaceId: <span className="font-mono">{workspaceId}</span>
+                </span>
+              ) : (
+                <span>
+                  まだ投稿先が無い場合は <Link className="underline" href="/setup">/setup</Link> で作成してください。
+                </span>
+              )}
             </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <label className="space-y-2">
-              <div className="text-sm font-medium">投稿先</div>
-              <select
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                value={workspaceId}
-                onChange={(e) => setWorkspaceId(e.target.value)}
-                disabled={workspacesLoading}
-              >
-                <option value="">選択してください</option>
-                {workspaces.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}（{w.timezone}）
-                  </option>
-                ))}
-              </select>
-              {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
-              <div className="text-xs text-zinc-600">
-                {workspaceId ? (
-                  <span>
-                    workspaceId: <span className="font-mono">{workspaceId}</span>
-                  </span>
-                ) : (
-                  <span>
-                    まだ投稿先が無い場合は <Link className="underline" href="/setup">/setup</Link> で作成してください。
-                  </span>
-                )}
-              </div>
-            </label>
-
-            <label className="space-y-2">
-              <div className="text-sm font-medium">プラットフォーム</div>
-              <select
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value as Platform)}
-                disabled={allowedPlatforms.length <= 1}
-              >
-                {allowedPlatforms.includes("X") ? <option value="X">X（開発中）</option> : null}
-                {allowedPlatforms.includes("THREADS") ? <option value="THREADS">Threads</option> : null}
-              </select>
-            </label>
-
-            <label className="space-y-2">
-              <div className="text-sm font-medium">件数（1〜200）</div>
-              <input
-                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                type="number"
-                min={1}
-                max={200}
-                value={count}
-                onChange={(e) => setCount(Number(e.target.value))}
-              />
-            </label>
-          </div>
+          </label>
 
           <label className="space-y-2">
-            <div className="text-sm font-medium">テーマ（モック用）</div>
-            <input
+            <div className="text-sm font-medium">プラットフォーム</div>
+            <select
               className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-              value={theme}
-              onChange={(e) => setTheme(e.target.value)}
-            />
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value as Platform)}
+            >
+              {allowedPlatforms.includes("X") ? <option value="X">X（開発中）</option> : null}
+              {allowedPlatforms.includes("THREADS") ? <option value="THREADS">Threads</option> : null}
+            </select>
+            {allowedPlatforms.length <= 1 ? (
+              <div className="text-xs text-zinc-600">この投稿先は利用可能なプラットフォームが1つだけです。</div>
+            ) : null}
           </label>
 
-          <div className="flex flex-col gap-2 md:flex-row">
-            <button
-              className="spa-button-primary disabled:opacity-50"
-              disabled={!canRun || working}
-              onClick={createAndTentativelySchedule}
-            >
-              <span className="inline-flex items-center gap-2">
-                {working ? <Spinner /> : null}
-                <span>{working ? "実行中..." : "大量生成して仮予約を作成"}</span>
-              </span>
-            </button>
+          <label className="space-y-2">
+            <div className="text-sm font-medium">上限（1〜200）</div>
+            <input
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+              type="number"
+              min={1}
+              max={200}
+              value={importLimit}
+              onChange={(e) => setImportLimit(Number(e.target.value))}
+              disabled={!canRun || importWorking}
+            />
+          </label>
+        </div>
 
-            <button
-              className="spa-button-secondary disabled:opacity-50"
-              disabled={!canRun || listLoading}
-              onClick={reload}
-            >
-              {listLoading ? "更新中..." : "一覧を更新"}
-            </button>
+        <label className="space-y-2">
+          <div className="text-sm font-medium">貼り付け</div>
+          <textarea
+            className="h-44 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder={`例）\n1本目...\n\n\n2本目...\n\n\n3本目...\n\n---\n4本目...`}
+            disabled={!canRun || importWorking}
+          />
+        </label>
+
+        <div className="rounded-xl border bg-white p-3 text-xs text-zinc-700">
+          分割結果: {importedParts.length} 件（作成上限: {importLimit}）
+        </div>
+
+        <div className="flex flex-col gap-2 md:flex-row">
+          <button
+            className="spa-button-primary disabled:opacity-50"
+            disabled={!canRun || importWorking || importedParts.length === 0}
+            onClick={importPastedDrafts}
+          >
+            <span className="inline-flex items-center gap-2">
+              {importWorking ? <Spinner /> : null}
+              <span>{importWorking ? "取り込み中..." : "取り込む"}</span>
+            </span>
+          </button>
+
+          <button
+            className="spa-button-secondary disabled:opacity-50"
+            disabled={!canRun || importWorking}
+            onClick={() => {
+              setImportText("");
+              setImportError("");
+              setImportNotice("");
+            }}
+          >
+            クリア
+          </button>
+        </div>
+
+        {importError ? <div className="rounded-xl border bg-white p-3 text-sm text-red-700">{importError}</div> : null}
+        {importNotice ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            {importNotice}
           </div>
-          {!canRun ? <div className="text-xs text-red-700">投稿先を選択してください。</div> : null}
-
-          {result ? (
-            <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm whitespace-pre-wrap">
-              {result}
-            </div>
-          ) : null}
+        ) : null}
       </div>
 
       <div className="spa-card p-6 space-y-4">
@@ -753,15 +858,30 @@ export default function PostDraftsPage() {
               全件: {items.length} / 表示中: {visibleItems.length}
             </div>
           </div>
-          <label className="flex items-center gap-2 text-xs text-zinc-700">
-            <input
-              type="checkbox"
-              checked={recentOnly}
-              onChange={(e) => setRecentOnly(e.target.checked)}
-              disabled={!recentAfterIso.trim()}
-            />
-            直近の実行分のみ表示
-          </label>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+            <label className="flex items-center gap-2 text-xs text-zinc-700">
+              <input
+                type="checkbox"
+                checked={recentOnly}
+                onChange={(e) => setRecentOnly(e.target.checked)}
+                disabled={!recentAfterIso.trim()}
+              />
+              直近の実行分のみ表示
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-zinc-700">
+              <span className="text-zinc-500">platform</span>
+              <select
+                className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                value={listPlatformFilter}
+                onChange={(e) => setListPlatformFilter(e.target.value as PlatformFilter)}
+              >
+                <option value="ALL">ALL</option>
+                <option value="THREADS">THREADS</option>
+                <option value="X">X</option>
+              </select>
+            </label>
+          </div>
         </div>
 
           {recentFilterNotice ? (
@@ -801,7 +921,7 @@ export default function PostDraftsPage() {
                 {visibleItems.length === 0 ? (
                   <tr>
                     <td className="px-3 py-4 text-zinc-600" colSpan={7}>
-                      まだありません。上の「大量生成して仮予約を作成」を押してください。
+                      まだありません。上の「参考投稿を貼り付けて取り込む」から追加してください。
                     </td>
                   </tr>
                 ) : (
@@ -816,6 +936,12 @@ export default function PostDraftsPage() {
 
                     const rows = g.items.map((it) => {
                       const isWaitingLike = it.status === "CONFIRMED";
+                      const replyCount = Array.isArray((it as any)?.threadReplies)
+                        ? ((it as any).threadReplies as any[])
+                            .map((x) => String(x ?? "").trim())
+                            .filter(Boolean)
+                            .slice(0, 4).length
+                        : 0;
                       const rowClass = isWaitingLike
                         ? "border-t bg-emerald-50/70"
                         : it.status === "TEMP_SCHEDULED"
@@ -882,7 +1008,7 @@ export default function PostDraftsPage() {
                   <div className="text-sm font-semibold">PostDraft 詳細</div>
                   {detail ? (
                     <div className="mt-1 text-xs text-zinc-600">
-                      {detail.platform} / {detail.status} / 仮予約: {fmt(detail.tempScheduledAt)}
+                      {detail.platform} / {detail.status} / 投稿予定: {fmt(detail.tempScheduledAt || detail.slot?.scheduledAt || null)}
                     </div>
                   ) : null}
                 </div>
@@ -919,7 +1045,7 @@ export default function PostDraftsPage() {
                         <span className="text-zinc-500">workspaceId:</span> <span className="font-mono">{detail.workspaceId}</span>
                       </div>
                       <div className="mt-1">
-                        <span className="text-zinc-500">仮予約:</span> {fmt(detail.tempScheduledAt)}
+                        <span className="text-zinc-500">投稿予定:</span> {fmt(detail.tempScheduledAt || detail.slot?.scheduledAt || null)}
                       </div>
                       <div className="mt-1">
                         <span className="text-zinc-500">確定:</span>{" "}
@@ -943,30 +1069,67 @@ export default function PostDraftsPage() {
 
                     <div className="space-y-2">
                       <div className="text-sm font-medium">本文（確認・編集）</div>
+                      {detail.platform === "THREADS" ? (
+                        <div>
+                          <button
+                            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-zinc-50"
+                            type="button"
+                            onClick={() => {
+                              detailRepliesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }}
+                          >
+                            スレッズに返信する
+                          </button>
+                        </div>
+                      ) : null}
+                      {detail.platform === "THREADS" ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="text-xs text-zinc-600">Threadsは500文字まで</div>
+                            <button
+                              className="text-xs underline text-zinc-700 hover:text-zinc-900"
+                              type="button"
+                              onClick={() => {
+                                detailRepliesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }}
+                            >
+                              スレッズに返信する
+                            </button>
+                          </div>
+                          <div className={String(detailBody ?? "").length > 500 ? "text-xs text-red-700" : "text-xs text-zinc-500"}>
+                            {String(detailBody ?? "").length}/500
+                          </div>
+                        </div>
+                      ) : null}
                       <textarea
                         className="w-full rounded-xl border border-zinc-200 bg-white p-3 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                         rows={8}
                         value={detailBody}
                         onChange={(e) => setDetailBody(e.target.value)}
                       />
+                      {detail.platform === "THREADS" && threadsBodyTooLong ? (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+                          本文が500文字を超えています。
+                        </div>
+                      ) : null}
                     </div>
 
                     {detail.platform === "THREADS" ? (
-                      <div className="space-y-3">
+                      <div ref={detailRepliesRef} className="space-y-3">
                         <div>
                           <div className="text-sm font-medium">スレッド返信（任意 / 最大4つ）</div>
                           <div className="mt-1 text-xs text-zinc-600">
                             保存すると、本文→返信1→返信2→返信3→返信4 の順で返信チェーンとして投稿されます。空欄の返信は無視されます。
                           </div>
-                          <div className="mt-1 text-xs text-zinc-600">目安: 各返信は 900 文字以内</div>
+                          <div className="mt-1 text-xs text-zinc-600">目安: 各返信は 500 文字以内</div>
                         </div>
 
                         {detailThreadReplies.map((val, idx) => (
                           <label key={`thread-reply-${idx}`} className="space-y-2 block">
                             <div className="flex items-center justify-between gap-3">
                               <div className="text-xs font-medium text-zinc-700">返信 {idx + 1}</div>
-                              <div className={String(val ?? "").length > 900 ? "text-xs text-red-700" : "text-xs text-zinc-500"}>
-                                {String(val ?? "").length}/900
+                              <div className={String(val ?? "").length > 500 ? "text-xs text-red-700" : "text-xs text-zinc-500"}>
+                                {String(val ?? "").length}/500
                               </div>
                             </div>
                             <textarea
@@ -979,11 +1142,17 @@ export default function PostDraftsPage() {
                                 setDetailThreadReplies(next);
                               }}
                             />
-                            {String(val ?? "").length > 900 ? (
-                              <div className="text-xs text-red-700">900文字を超えています（投稿に失敗する可能性があります）。</div>
+                            {String(val ?? "").length > 500 ? (
+                              <div className="text-xs text-red-700">500文字を超えています</div>
                             ) : null}
                           </label>
                         ))}
+                      </div>
+                    ) : null}
+
+                    {threadsRepliesTooLong ? (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-900">
+                        返信が500文字を超えています。
                       </div>
                     ) : null}
 

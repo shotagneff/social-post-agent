@@ -13,6 +13,7 @@ type Body = {
   count?: number;
   theme?: string;
   useOpenAI?: boolean;
+  naturalnessFirst?: boolean;
   audience?: unknown;
 };
 
@@ -439,6 +440,7 @@ async function generatePostsWithOpenAI(args: {
     sourceUrl: string | null;
   }>;
   enforceEvidence?: boolean;
+  naturalnessFirst?: boolean;
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -446,7 +448,8 @@ async function generatePostsWithOpenAI(args: {
   }
 
   const maxLen = args.platform === "X" ? 260 : 900;
-  const enforceEvidence = args.enforceEvidence !== false;
+  const naturalnessFirst = Boolean(args.naturalnessFirst);
+  const enforceEvidence = false;
   const sourceAccountsForPrompt = (Array.isArray(args.sources) ? args.sources : [])
     .filter((s) => String(s?.handle ?? "").trim())
     .map((s) => ({
@@ -457,6 +460,103 @@ async function generatePostsWithOpenAI(args: {
     }))
     .sort((a, b) => (Number(b.weight ?? 0) || 0) - (Number(a.weight ?? 0) || 0))
     .slice(0, 20);
+
+  const formatPaletteThreads: Array<{ id: number; label: string }> = [
+    { id: 1, label: "1行フック（断言→理由）" },
+    { id: 2, label: "Before→After→Path（ビフォーアフター＋道筋）" },
+    { id: 3, label: "告白（黒歴史/やらかし/本音）" },
+    { id: 4, label: "地雷回避（やるな/信じるな/それ罠）" },
+    { id: 5, label: "Myth-busting（常識破壊/誤解を壊す）" },
+    { id: 6, label: "箇条書き◯選（スキャン最適）" },
+    { id: 7, label: "質問投げ（コメント誘発）" },
+    { id: 8, label: "会話文/寸劇（あるある再現）" },
+    { id: 10, label: "長文添付テキスト（読み物）" },
+  ];
+  const formatPaletteX = formatPaletteThreads.filter((p) => p.id !== 10);
+  const paletteBase = args.platform === "THREADS" ? formatPaletteThreads : formatPaletteX;
+  const shuffledPalette = [...paletteBase].sort(() => Math.random() - 0.5);
+  const paletteText = shuffledPalette.map((p) => `(${p.id}) ${p.label}`).join(", ");
+  const allowedFormatIds = new Set(shuffledPalette.map((p) => p.id));
+  const allowedFormatLabels = new Set(shuffledPalette.map((p) => p.label));
+
+  const slotThemeIndicesBase: number[] = [];
+  for (let i = 0; i < args.themes.length; i++) {
+    const n = Math.max(0, Number(args.perThemeCounts?.[i] ?? 0) || 0);
+    for (let k = 0; k < n; k++) slotThemeIndicesBase.push(i);
+  }
+  while (slotThemeIndicesBase.length < args.count) slotThemeIndicesBase.push(0);
+  const slotThemeIndices = slotThemeIndicesBase.slice(0, args.count).sort(() => Math.random() - 0.5);
+
+  const slotFormats: Array<{ id: number; label: string }> = [];
+  while (slotFormats.length < args.count) {
+    const batch = [...shuffledPalette].sort(() => Math.random() - 0.5);
+    for (const f of batch) {
+      if (slotFormats.length >= args.count) break;
+      slotFormats.push({ id: f.id, label: f.label });
+    }
+  }
+  const slots = Array.from({ length: args.count }).map((_, i) => ({
+    slot: i,
+    themeIndex: slotThemeIndices[i] ?? 0,
+    selectedFormatId: slotFormats[i]!.id,
+    selectedFormatLabel: slotFormats[i]!.label,
+  }));
+
+  const formatFewShotExamples: Record<number, { label: string; example: string }> = {
+    1: {
+      label: "1行フック（断言→理由）",
+      example:
+        "3年の3月は『就活を始める時期』じゃなくて、“締め切りのピーク”。\n早い企業は冬から動いてるし、夏インターン組は3月時点で内定が出ることもある。\n3月末で主要企業の1次募集が終わる前提で動く。\n“知らないだけで選択肢が狭まる”のが一番しんどい。",
+    },
+    2: {
+      label: "Before→After→Path（ビフォーアフター＋道筋）",
+      example:
+        "【昔】『就活って4年春からでしょ』\n【現実】3年夏インターン＝実質スタートで、3月は締切ラッシュ\n【今】“開始”じゃなく“回収フェーズ”だと知って焦った\n\nやったことは3つだけ。\n①開始/締切を一覧化\n②1次募集から逆算で予定\n③早期選考ルートある企業を優先\n『知らなかった』だけで2次募集側に回るのは損。",
+    },
+    3: {
+      label: "告白（黒歴史/やらかし/本音）",
+      example:
+        "正直に言うと『就活は4年春からで余裕』って本気で思ってた。\nでも調べたら、冬からエントリーが始まってる企業もあって、3月は“開始”じゃなく“締切のピーク”だった。\nそれを知った瞬間、怖くなった。人生に関わる情報なのに調べてなかったって事実が。\n今からでも遅すぎるとは言わないけど、『3月はスタートライン』って思い込みだけは捨てた方がいい。",
+    },
+    4: {
+      label: "地雷回避（やるな/信じるな/それ罠）",
+      example:
+        "『3月からで余裕』は地雷。\n3年の3月はエントリー“開始”じゃなく締切が重なる時期。\n3月末で主要企業の1次募集が終わる前提で動いてる人が普通にいる。\n\nじゃあ今なにする？\n①締切日を集める（開始日じゃない）\n②早い順に当てる\n③早期選考ルートある企業を優先\n『知らなかった』で2次募集側に押し出されるのはきつい。",
+    },
+    5: {
+      label: "Myth-busting（常識破壊/誤解を壊す）",
+      example:
+        "『就活は4年の春から』って常識、もう古い。\n実態は3年夏インターンから選考が始まって、3月時点で内定持ってる人もいる。\nしかも3月はエントリー締切が集中するピーク。\n“春から頑張る”じゃなく、“3月末までに1次募集を回収する”が現実の戦い方だった。",
+    },
+    6: {
+      label: "箇条書き◯選（スキャン最適）",
+      example:
+        "【3月就活がキツくなる理由5つ】\n①3月は『開始』じゃなく締切が集中\n②早い企業は3年冬からエントリー開始\n③夏インターン組は3月時点で内定が出ることも\n④3月末で主要企業の1次募集が終わりがち\n⑤1次逃すと採用枠が減る2次募集に回りやすい\n\n努力の話じゃなく『スケジュールを知ってるか』の差。",
+    },
+    7: {
+      label: "質問投げ（コメント誘発）",
+      example:
+        "みんな、就活いつから始めるつもり？\n私はずっと『4年春から』だと思ってたけど、調べたら3年の3月って“開始”じゃなく“締切ピーク”でびびった。\n3月末で1次募集が終わる企業もあるらしい。\nいま何月時点で、どこまで進んでる？（情報収集だけでも）コメントで教えて。",
+    },
+    8: {
+      label: "会話文/寸劇（あるある再現）",
+      example:
+        "就活生（昔の私）『就活って4年春からでしょ？』\n現実『3年夏インターンから始まってる』\n就活生『じゃあ3月から動けば…』\n現実『3月はエントリー締切のピークです』\n就活生『……え？』\n\nこれ、知らないだけで詰む。3月は“スタート”じゃなく“回収”。まず締切日を集めよう。",
+    },
+    10: {
+      label: "長文添付テキスト（読み物）",
+      example:
+        "（本文は短く強く）\n3年の3月は『就活を始める月』じゃなく“締切のピーク”。\n知らないだけで1次募集を逃して2次募集側に回る。\n根性じゃなくスケジュールの話。\n\n（添付テキストは長文）\n『3月はスタートじゃなく回収』の理由と、最初にやるべきは“企業名”ではなく“締切日”を集めること。",
+    },
+  };
+
+  const selectedFormatExamples = shuffledPalette
+    .map((p) => {
+      const ex = formatFewShotExamples[p.id];
+      if (!ex) return null;
+      return { id: p.id, label: ex.label, example: ex.example };
+    })
+    .filter(Boolean);
   const prompt = {
     language: "ja",
     platform: args.platform,
@@ -465,6 +565,7 @@ async function generatePostsWithOpenAI(args: {
     theme: args.theme,
     themes: args.themes,
     perThemeCounts: args.perThemeCounts,
+    slots,
     persona: args.personaProfile,
     narrator: args.narratorProfile,
     genre: args.genreProfile,
@@ -474,44 +575,87 @@ async function generatePostsWithOpenAI(args: {
       summary: String(args.knowledgeSummary ?? "").trim(),
       primaryChunks: Array.isArray(args.primaryChunks) ? args.primaryChunks : [],
     },
+    formatExamples: selectedFormatExamples,
     output: {
-      posts:
-        enforceEvidence
-          ? "{text: string, themeIndex: 0|1|2|3|4, sourcesUsed: {platform: 'X'|'THREADS', handle: string}[], evidenceChunkKey: string, evidenceQuoteIndex: number, styleApplied?: string}[] (length must equal count). evidenceChunkKey MUST be one of knowledge.primaryChunks[].chunkKey. evidenceQuoteIndex MUST be a valid index into the selected chunk's quoteCandidates, and that candidate MUST appear verbatim in text."
-          : "{text: string, themeIndex: 0|1|2|3|4, sourcesUsed: {platform: 'X'|'THREADS', handle: string}[], styleApplied?: string}[] (length must equal count).",
+      posts: "Array<{ text: string; themeIndex: number; sourcesUsed: { platform: 'X'|'THREADS'; handle: string }[]; selectedFormatId: number; selectedFormatLabel: string; evidenceChunkKey?: string; evidenceQuoteIndex?: number; styleApplied?: string }>",
     },
     rules: [
       "Return ONLY valid JSON.",
       "Do not include markdown.",
       "Each post must be self-contained.",
       "First, interpret themes as 5 subtopics derived from the base theme.",
-      "For each post, pick exactly one themeIndex (0..4) and write to that subtopic.",
-      "You MUST generate exactly perThemeCounts[i] posts for each themeIndex i (0..4).",
+      ...(args.platform === "THREADS"
+        ? [
+            "THREADS TONE (HARD): Use casual Japanese. Avoid です/ます/丁寧語. Avoid lecture phrases like '重要だ/カギだ/心がけよう/危険信号/〜することが大切/〜しましょう'. Prefer short assertive lines.",
+            "THREADS TONE (HARD): Do NOT add polite openers like '〜と思いますが/〜かもしれません'.",
+          ]
+        : []),
+      ...(naturalnessFirst
+        ? [
+            "When naturalnessFirst is true: prioritize natural, human-like Japanese over rigid templates.",
+            "Still, you MUST output posts in the same order as slots (slot=0..count-1) and set themeIndex to slots[slot].themeIndex.",
+            "selectedFormatId/selectedFormatLabel are metadata; set them to slots[slot] values, but do NOT force the writing to match a rigid template.",
+          ]
+        : [
+            "You MUST output posts in the same order as slots (slot=0..count-1).",
+            "For each slot, you MUST set themeIndex exactly to slots[slot].themeIndex.",
+            "For each slot, you MUST set selectedFormatId/selectedFormatLabel exactly to slots[slot].selectedFormatId/selectedFormatLabel.",
+            "You MUST generate exactly perThemeCounts[i] posts for each themeIndex i (0..4) (slots already satisfy this).",
+          ]),
       "Keep within maxLen characters; if close, prefer shorter.",
       "Avoid repeating the same hook across posts; vary angles.",
-      "Do NOT include hashtags (e.g., '#就活').",
-      "For each post, choose 1-2 sourceAccounts and set sourcesUsed accordingly.",
+      "Do not include hashtags (e.g., '#就活').",
+      ...(naturalnessFirst
+        ? [
+            "GENRE: Format Palette is optional inspiration only. Do not overfit to templates.",
+            "GENRE MINIMUM: EACH post MUST satisfy: (A) hook in the first 1-2 lines, (B) one concrete specific detail from knowledge.summary or knowledge.primaryChunks, (C) one explicit action suggestion, (D) no hashtags, (E) within maxLen.",
+            "If formatExamples are provided, use them only as a reference for density and rhythm. Do NOT copy sentences.",
+          ]
+        : [
+            "GENRE RUBRIC: Do NOT rigidly fix a single template. Instead, for EACH post, pick ONE structure from the following Format Palette (internal choice) and write accordingly. Try not to reuse the same structure across posts in the same batch.",
+            `Format Palette (random 10 shown per batch; choose one per post): ${paletteText}`,
+            "GENRE MINIMUM: Regardless of the chosen structure, EACH post MUST satisfy: (A) hook in the first 1-2 lines, (B) one concrete specific detail from knowledge.summary or knowledge.primaryChunks, (C) one explicit action suggestion, (D) no hashtags, (E) within maxLen.",
+            "For EACH post, set selectedFormatId to the number of the chosen format from the shown palette, and selectedFormatLabel to the exact label string from the shown palette.",
+            "If formatExamples are provided, use them as a reference for density, rhythm, and structure. DO NOT copy sentences verbatim; rewrite in your own words and ground claims in the provided knowledge.",
+            "FORMAT-SPECIFIC RULES (HARD):",
+            "- If selectedFormatId=1 (1行フック): The FIRST line must be a strong assertion (断言). Do NOT use a question mark. Do NOT start with '〜ですか？/〜していませんか？'.",
+            "- If selectedFormatId=2 (Before→After→Path): Must include 3 labeled lines: '【昔】', '【現実】', '【今】'. Then include exactly 3 concrete actions (①②③).",
+            "- If selectedFormatId=3 (告白): Start with a short confession line (no question). Include a turning point ('でも/ところが/調べたら') and end with one lesson (学び) as a firm statement.",
+            "- If selectedFormatId=4 (地雷回避): Start with '〜は地雷/罠' style warning. Include the reason with concrete schedule facts, then a 3-step alternative (①②③).",
+            "- If selectedFormatId=5 (Myth-busting): State the common belief, then '実態は〜/実は違う' with concrete facts, and finish with the correct strategy in one line.",
+            "- If selectedFormatId=6 (箇条書き◯選): Use a title line like '【...◯つ】'. Then 3-6 bullet items. Each bullet must be a short, punchy clause (<= 30 Japanese chars). Avoid '例えば/実は/〜することが大切'.",
+            "- If selectedFormatId=7 (質問投げ): Include ONE question at the top and ONE question at the end ('あなたは？'). Keep the middle as your short hypothesis + 1-2 concrete facts.",
+            "- If selectedFormatId=8 (会話文/寸劇): Use 4-8 short dialogue lines like '就活生「…」' and '現実「…」'. After dialogue, add 1-2 summary lines (断言) without questions.",
+            "- If selectedFormatId=10 (長文添付): Main feed text must be short (2-5 lines) and end with a clear reason. Then add a separate section starting with '【添付テキスト】' containing a longer explanation and 1 concrete step list.",
+          ]),
+      "For each post, choose EXACTLY ONE sourceAccount and set sourcesUsed to a single-item array accordingly.",
       "When selecting sourcesUsed, prefer higher weight accounts, but diversify across posts.",
-      "You MUST apply the selected sources' memo as concrete writing directives (tone, structure, hook style, emoji usage, length preference, bullet usage, etc.).",
-      "If a selected source has an empty memo, infer a generic but distinct style (e.g., '結論→理由→一言', '箇条書き中心', '短文テンポ').",
+      ...(naturalnessFirst
+        ? [
+            "Use the selected source memo as a soft reference for tone/wording. If memo instructions conflict with naturalness, prioritize naturalness.",
+          ]
+        : [
+            "CRITICAL: You MUST apply the selected sources' memo as concrete writing directives (tone, structure, hook style, emoji usage, length preference, bullet usage, etc.).",
+            "CRITICAL: Treat memo compliance as a HARD constraint, not a suggestion. If you cannot satisfy a memo directive, you MUST rewrite until you can.",
+            "If a selected source has an empty memo, infer a generic but distinct style (e.g., '結論→理由→一言', '箇条書き中心', '短文テンポ').",
+          ]),
       "Treat narrator as the author profile (立場/性別/人物像/背景/価値観/制約) and keep it consistent across all posts.",
       "Do NOT explicitly state gender (e.g., '私は女性です'). If gender is provided, only let it subtly influence wording.",
       "Source memo is a style reference and MUST NOT override narrator constraints (e.g., no煽り, no根拠없는断定, etc.).",
+      ...(naturalnessFirst
+        ? [
+            "Before finalizing each post, do a quick self-check: (1) hook present, (2) 1 concrete detail present, (3) 1 action present, (4) no hashtags, (5) within maxLen.",
+          ]
+        : [
+            "CRITICAL: Before finalizing each post, do a quick self-check: (1) memo rules satisfied, (2) genre rubric satisfied (hook+concrete+action), (3) no hashtags, (4) within maxLen.",
+          ]),
       "Optimize for the provided audience (who/situation/pain/desired/no-go). Make the post feel written for that reader.",
       "Respect audience no-go. Avoid language, claims, or tone that violates it.",
       "If knowledge.summary is provided, use it as factual background to avoid generic or incorrect claims.",
       "If knowledge.primaryChunks is provided, use at least one chunk's content as concrete material. Prefer combining: 1 current + 1 alumni when available.",
       "CRITICAL: Avoid generic励まし投稿 only (e.g., '頑張ろう/一歩踏み出そう' だけ). Each post MUST include at least ONE concrete, specific detail taken from knowledge.summary or knowledge.primaryChunks (e.g., a named technique like 'モチベーショングラフ', a checklist item, a step-by-step procedure, an example pattern, a question template, a pitfall and its workaround).",
       "CRITICAL: The concrete detail must be explicit in the text (reader can point to it). If you cannot find a suitable detail, you MUST infer a concrete micro-action by paraphrasing the provided knowledge (not inventing unrelated advice).",
-      ...(enforceEvidence
-        ? [
-            "CRITICAL: For EACH post, set evidenceChunkKey to the primary chunk you actually used. You MUST incorporate at least one specific detail from that chunk into the post text (paraphrase is OK).",
-            "CRITICAL: For EACH post, set evidenceQuoteIndex to the index (0-based) of EXACTLY ONE string chosen from the selected chunk's quoteCandidates. You MUST copy that exact candidate into the post text verbatim.",
-            "CRITICAL: Include EXACTLY ONE quoteCandidate per post. Do NOT include any other strings from knowledge.primaryChunks[].quoteCandidates besides the one at evidenceQuoteIndex.",
-            "CRITICAL: Avoid reusing the same evidenceChunkKey across multiple posts in the same batch when possible. Prefer spreading across different primary chunks.",
-            "CRITICAL: Avoid reusing the same (evidenceChunkKey, evidenceQuoteIndex) across multiple posts in the same batch when possible. Prefer diversity.",
-          ]
-        : []),
+      "RAG: Set evidenceChunkKey to the primary chunk you actually used (for traceability).",
       "Do NOT paste long quotes. Paraphrase and generalize while keeping the essence.",
       "Do NOT copy phrases, unique catchphrases, or structure verbatim from sources; only use them as inspiration for tone/angles/structure.",
       "Avoid mentioning the source account names in the post body.",
@@ -519,13 +663,11 @@ async function generatePostsWithOpenAI(args: {
     ],
   };
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  const json = await fetchOpenAIJsonWithRetry({
+    apiKey,
+    tries: 3,
+    timeoutMs: 60_000,
+    body: {
       model: "gpt-4o-mini",
       temperature: 0.8,
       response_format: { type: "json_object" },
@@ -537,15 +679,8 @@ async function generatePostsWithOpenAI(args: {
         },
         { role: "user", content: JSON.stringify(prompt) },
       ],
-    }),
+    },
   });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`OpenAI error: ${res.status} ${text}`);
-  }
-
-  const json = (await res.json().catch(() => null)) as any;
   const content = String(json?.choices?.[0]?.message?.content ?? "");
   const jsonText = extractJsonObject(content);
   if (!jsonText) {
@@ -575,6 +710,13 @@ async function generatePostsWithOpenAI(args: {
     ]),
   );
 
+  const allowedSourceHandles = new Set(
+    (Array.isArray(args.sources) ? args.sources : [])
+      .map((s) => String((s as any)?.handle ?? "").trim())
+      .filter(Boolean),
+  );
+  const allowedSourceHandleList = Array.from(allowedSourceHandles);
+
   const normalizeForContains = (s: string) =>
     String(s ?? "")
       .replace(/[\s\u3000]+/g, "")
@@ -584,6 +726,28 @@ async function generatePostsWithOpenAI(args: {
     const n = normalizeForContains(needle);
     if (!h || !n) return false;
     return h.includes(n);
+  };
+
+  const unwrapOuterQuotes = (s: string) => {
+    let out = String(s ?? "").trim();
+    if (!out) return out;
+    const pairs: Array<[string, string]> = [
+      ["\"", "\""],
+      ["“", "”"],
+      ["‘", "’"],
+      ["「", "」"],
+      ["『", "』"],
+      ["（", "）"],
+      ["(", ")"],
+      ["【", "】"],
+      ["[", "]"],
+    ];
+    for (const [l, r] of pairs) {
+      if (out.startsWith(l) && out.endsWith(r) && out.length >= l.length + r.length + 2) {
+        out = out.slice(l.length, out.length - r.length).trim();
+      }
+    }
+    return out;
   };
 
   const removeCandidateFromText = (text: string, cand: string) => {
@@ -622,36 +786,35 @@ async function generatePostsWithOpenAI(args: {
   const allowedKeysWithQuotes = allowedKeys.filter((k) => (quoteCandidatesByKey.get(k) ?? []).length > 0);
 
   const out = posts
-    .map((p, postIndex) => {
+    .map((p, idx) => {
       let text = stripHashtags(String(p?.text ?? "").trim());
       const themeIndex = Number(p?.themeIndex);
       const sourcesUsedRaw = Array.isArray(p?.sourcesUsed) ? p.sourcesUsed : [];
-      const sourcesUsed = sourcesUsedRaw
+      const normalizedSourcesUsed = sourcesUsedRaw
         .map((s: any) => ({
           platform: (s?.platform === "X" || s?.platform === "THREADS") ? (s.platform as Platform) : args.platform,
           handle: String(s?.handle ?? "").trim(),
         }))
         .filter((s: any) => Boolean(s.handle));
+
+      // Enforce sourcesUsed = exactly 1 valid handle from the provided sourceAccounts.
+      let sourcesUsed = normalizedSourcesUsed.filter((s: any) => allowedSourceHandles.has(String(s.handle)));
+      if (sourcesUsed.length > 1) sourcesUsed = [sourcesUsed[0]];
+      if (sourcesUsed.length === 0) {
+        const fallbackHandle = allowedSourceHandleList.length > 0 ? allowedSourceHandleList[idx % allowedSourceHandleList.length]! : "";
+        sourcesUsed = fallbackHandle ? [{ platform: args.platform, handle: fallbackHandle }] : [];
+      }
       let evidenceChunkKey = String(p?.evidenceChunkKey ?? "").trim();
-      let evidenceQuoteIndexRaw = Number(p?.evidenceQuoteIndex);
-      let evidenceQuoteIndex = Number.isFinite(evidenceQuoteIndexRaw) ? evidenceQuoteIndexRaw : NaN;
+      let evidenceQuoteIndex = NaN;
 
       // Repair invalid evidenceChunkKey/quoteIndex returned by the model.
       // - If evidenceChunkKey is missing or not in allowedEvidence, try to infer it by matching
       //   any quoteCandidate that appears in the generated text.
       // - Otherwise fall back to the first allowed chunkKey and a valid quoteIndex.
       if (requireEvidence && !enforceEvidence) {
-        // Relaxed mode: the model might omit evidence fields entirely.
-        // We still want evidenceQuote to be present in the final text and meta, so we deterministically
-        // assign a (chunkKey, quoteIndex) and append the quote if necessary.
-        const pool = allowedKeysWithQuotes.length > 0 ? allowedKeysWithQuotes : allowedKeys;
+        const pool = allowedKeys.length > 0 ? allowedKeys : [];
         if ((!evidenceChunkKey || !allowedEvidence.has(evidenceChunkKey)) && pool.length > 0) {
-          evidenceChunkKey = pool[postIndex % pool.length]!;
-        }
-
-        const cands = evidenceChunkKey ? (quoteCandidatesByKey.get(evidenceChunkKey) ?? []) : [];
-        if (!Number.isInteger(evidenceQuoteIndex) || evidenceQuoteIndex < 0 || evidenceQuoteIndex >= cands.length) {
-          evidenceQuoteIndex = cands.length > 0 ? 0 : NaN;
+          evidenceChunkKey = pool[idx % pool.length]!;
         }
       }
 
@@ -691,19 +854,42 @@ async function generatePostsWithOpenAI(args: {
         }
       }
 
-      const candidates = evidenceChunkKey ? (quoteCandidatesByKey.get(evidenceChunkKey) ?? []) : [];
-      const evidenceQuote =
-        Number.isInteger(evidenceQuoteIndex) && evidenceQuoteIndex >= 0 && evidenceQuoteIndex < candidates.length
-          ? candidates[evidenceQuoteIndex]!
-          : "";
+      const evidenceQuoteClean = "";
+      let selectedFormatId = Number(p?.selectedFormatId);
+      let selectedFormatLabel = String(p?.selectedFormatLabel ?? "").trim();
       const styleApplied = String(p?.styleApplied ?? "").trim();
 
-      if (requireEvidence && enforceEvidence && evidenceQuote) {
+      const expectedSlot = slots[idx] ?? null;
+      const expectedFormatId = expectedSlot ? Number(expectedSlot.selectedFormatId) : null;
+      const expectedFormatLabel = expectedSlot ? String(expectedSlot.selectedFormatLabel ?? "").trim() : "";
+      const expectedThemeIndex = expectedSlot ? Number(expectedSlot.themeIndex) : null;
+
+      if (!naturalnessFirst) {
+        if (!Number.isInteger(selectedFormatId) || !allowedFormatIds.has(selectedFormatId)) {
+          throw new Error("OpenAI JSON invalid: selectedFormatId must be one of the shown palette IDs");
+        }
+        if (!selectedFormatLabel || !allowedFormatLabels.has(selectedFormatLabel)) {
+          throw new Error("OpenAI JSON invalid: selectedFormatLabel must match one of the shown palette labels");
+        }
+      }
+
+      // Server-side repair: force slot plan to prevent format/theme bias even if the model ignores slots.
+      if (expectedSlot) {
+        selectedFormatId = expectedFormatId as number;
+        selectedFormatLabel = expectedFormatLabel;
+      } else if (naturalnessFirst) {
+        selectedFormatId = Number.isInteger(selectedFormatId) ? selectedFormatId : shuffledPalette[0]!.id;
+        selectedFormatLabel = selectedFormatLabel || shuffledPalette.find((p) => p.id === selectedFormatId)?.label || shuffledPalette[0]!.label;
+      }
+
+      const finalThemeIndex = expectedSlot && Number.isInteger(expectedThemeIndex) ? (expectedThemeIndex as number) : themeIndex;
+
+      if (requireEvidence && enforceEvidence && evidenceQuoteClean) {
         for (const [k, cands] of quoteCandidatesByKey.entries()) {
           if (!k) continue;
           for (const cand of cands) {
             if (!cand) continue;
-            if (cand === evidenceQuote) continue;
+            if (cand === evidenceQuoteClean) continue;
             if (includesNormalized(text, cand)) {
               text = stripHashtags(removeCandidateFromText(text, cand));
             }
@@ -711,12 +897,17 @@ async function generatePostsWithOpenAI(args: {
         }
       }
 
-      // Repair: if model forgot to paste the selected quote into text, append it.
-      if (evidenceQuote && !includesNormalized(text, evidenceQuote)) {
-        text = stripHashtags(`${text}\n${evidenceQuote}`.trim());
-      }
-
-      return { text, themeIndex, sourcesUsed, evidenceChunkKey, evidenceQuoteIndex, evidenceQuote, styleApplied };
+      return {
+        text,
+        themeIndex: finalThemeIndex,
+        sourcesUsed,
+        selectedFormatId,
+        selectedFormatLabel,
+        evidenceChunkKey,
+        evidenceQuoteIndex,
+        evidenceQuote: evidenceQuoteClean,
+        styleApplied,
+      };
     })
     .filter((p) => Boolean(p.text));
 
@@ -859,13 +1050,11 @@ async function generateThemeVariantsWithOpenAI(args: {
     ],
   };
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  const json = await fetchOpenAIJsonWithRetry({
+    apiKey,
+    tries: 3,
+    timeoutMs: 45_000,
+    body: {
       model: "gpt-4o-mini",
       temperature: 0.6,
       response_format: { type: "json_object" },
@@ -876,15 +1065,8 @@ async function generateThemeVariantsWithOpenAI(args: {
         },
         { role: "user", content: JSON.stringify(prompt) },
       ],
-    }),
+    },
   });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`OpenAI theme error: ${res.status} ${text}`);
-  }
-
-  const json = (await res.json().catch(() => null)) as any;
   const content = String(json?.choices?.[0]?.message?.content ?? "");
   const jsonText = extractJsonObject(content);
   if (!jsonText) {
@@ -919,6 +1101,58 @@ function computeThemeDistribution(themeCount: number, total: number) {
   return { counts, n };
 }
 
+async function fetchOpenAIJsonWithRetry(args: {
+  apiKey: string;
+  body: unknown;
+  tries?: number;
+  timeoutMs?: number;
+}) {
+  const tries = Math.max(1, Math.min(5, Number(args.tries ?? 3) || 3));
+  const timeoutMs = Math.max(5_000, Math.min(120_000, Number(args.timeoutMs ?? 45_000) || 45_000));
+
+  let lastErr: unknown = null;
+
+  for (let attempt = 1; attempt <= tries; attempt++) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${args.apiKey}`,
+        },
+        body: JSON.stringify(args.body),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        const status = res.status;
+        const isRetryable = status === 429 || (status >= 500 && status <= 599);
+        if (!isRetryable || attempt === tries) {
+          throw new Error(`OpenAI error: ${status} ${text}`);
+        }
+        lastErr = new Error(`OpenAI retryable error: ${status} ${text}`);
+      } else {
+        const json = (await res.json().catch(() => null)) as any;
+        return json;
+      }
+    } catch (e) {
+      lastErr = e;
+      if (attempt === tries) break;
+    } finally {
+      clearTimeout(t);
+    }
+
+    const backoffMs = Math.min(10_000, 300 * 2 ** (attempt - 1));
+    await new Promise((r) => setTimeout(r, backoffMs));
+  }
+
+  const msg = lastErr instanceof Error ? lastErr.message : "Unknown error";
+  throw new Error(`OpenAI request failed after retries: ${msg}`);
+}
+
 async function reviewAndRewritePostsWithOpenAI(args: {
   platform: Platform;
   personaProfile: unknown;
@@ -926,7 +1160,12 @@ async function reviewAndRewritePostsWithOpenAI(args: {
   genreProfile: unknown;
   audience: unknown;
   sources: Array<{ platform: Platform; handle: string; weight: number | null; memo: string | null }>;
-  posts: Array<{ text: string; sourcesUsed: Array<{ platform: Platform; handle: string }> }>;
+  posts: Array<{
+    text: string;
+    sourcesUsed: Array<{ platform: Platform; handle: string }>;
+    selectedFormatId?: number;
+    selectedFormatLabel?: string;
+  }>;
 }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -958,14 +1197,31 @@ async function reviewAndRewritePostsWithOpenAI(args: {
     output: {
       posts:
         "{textFinal: string, changed: boolean, checks: {lengthOk: boolean, dupOk: boolean, toneOk: boolean, noCopyOk: boolean}, issues: string[], fixSummary: string}[] (same length as inputPosts)",
-      summary: "{changedCount: number}"
+      summary: "{changedCount: number}",
     },
     rules: [
       `Platform length limit: ${maxLen}.`,
       "Return ONLY valid JSON.",
       "Do not include markdown.",
-      "Do NOT include hashtags (e.g., '#就活').",
-      "Ensure each post stays within maxLen characters.",
+      "Do not add hashtags.",
+      "Do not mention source account names.",
+      ...(args.platform === "THREADS"
+        ? [
+            "THREADS TONE (HARD): Use casual Japanese. Avoid です/ます/丁寧語. Avoid lecture phrases like '重要だ/カギだ/心がけよう/危険信号/〜することが大切/〜しましょう'. Prefer short assertive lines.",
+            "THREADS TONE (HARD): Do NOT add polite openers like '〜と思いますが/〜かもしれません'.",
+          ]
+        : []),
+      "IMPORTANT: Enforce selectedFormatId/selectedFormatLabel constraints if provided on each input post.",
+      "- Format 1: first line must be a strong assertion (断言) and MUST end with '。'. No questions. NEVER use 'よね/ですよね/だよね/〜と思いませんか' anywhere in the post.",
+      "- Format 2: must include 【昔】【現実】【今】 lines and exactly 3 actions (①②③).",
+      "- Format 3: confession → turning point → lesson (断言).",
+      "- Format 4: warning '地雷/罠' → reason (facts) → 3-step alternative (①②③).",
+      "- Format 5: belief → reality (facts) → correct strategy (one-line). Avoid bullets unless the original already is a list.",
+      "- Format 6: title '【...◯つ】' + 3-6 short bullet items; each bullet <= 30 chars.",
+      "- Format 7: one question at top and one at end.",
+      "- Format 8: 4-8 dialogue lines + 1-2 assertion summary lines.",
+      "- Format 10: short main text + section starting with 【添付テキスト】 for long explanation.",
+      "If the draft violates the format rules, rewrite it to comply.",
       "Reduce duplication across posts: vary hook/structure/closing.",
       "Keep persona tone and genre constraints.",
       "Keep narrator (author profile) consistent: role/position, personality, background, and constraints must not drift.",
@@ -978,13 +1234,11 @@ async function reviewAndRewritePostsWithOpenAI(args: {
     ],
   };
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  const json = await fetchOpenAIJsonWithRetry({
+    apiKey,
+    tries: 3,
+    timeoutMs: 60_000,
+    body: {
       model: "gpt-4o-mini",
       temperature: 0.2,
       response_format: { type: "json_object" },
@@ -996,15 +1250,8 @@ async function reviewAndRewritePostsWithOpenAI(args: {
         },
         { role: "user", content: JSON.stringify(prompt) },
       ],
-    }),
+    },
   });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`OpenAI review error: ${res.status} ${text}`);
-  }
-
-  const json = (await res.json().catch(() => null)) as any;
   const content = String(json?.choices?.[0]?.message?.content ?? "");
   const jsonText = extractJsonObject(content);
   if (!jsonText) {
@@ -1141,6 +1388,7 @@ export async function POST(req: Request) {
     const count = Math.max(1, Math.min(200, Number(body.count ?? 30) || 30));
     const theme = String(body.theme ?? "").trim() || "無題";
     const useOpenAI = body.useOpenAI === undefined ? true : Boolean(body.useOpenAI);
+    const naturalnessFirst = body.naturalnessFirst === undefined ? true : Boolean(body.naturalnessFirst);
     const audienceFromBody = body.audience;
 
     const [settings, sourcesCount] = await Promise.all([
@@ -1189,6 +1437,8 @@ export async function POST(req: Request) {
           text: string;
           themeIndex: number;
           sourcesUsed: Array<{ platform: Platform; handle: string }>;
+          selectedFormatId: number;
+          selectedFormatLabel: string;
           evidenceChunkKey: string;
           evidenceQuoteIndex: number;
           evidenceQuote: string;
@@ -1197,6 +1447,7 @@ export async function POST(req: Request) {
       | null = null;
     let sourcesUsedSummary: Array<{ handle: string; count: number }> = [];
     let styleAppliedSummary: string[] = [];
+    let selectedFormatsSummary: Array<{ id: number; label: string; count: number }> = [];
     let review: { changedCount: number; error: string | null } = { changedCount: 0, error: null };
     let themesUsed: string[] = [];
     let enforceEvidenceUsed: boolean | null = null;
@@ -1218,6 +1469,8 @@ export async function POST(req: Request) {
               text: string;
               themeIndex: number;
               sourcesUsed: Array<{ platform: Platform; handle: string }>;
+              selectedFormatId: number;
+              selectedFormatLabel: string;
               evidenceChunkKey: string;
               evidenceQuoteIndex: number;
               evidenceQuote: string;
@@ -1231,6 +1484,7 @@ export async function POST(req: Request) {
           perThemeCounts,
           platform,
           count,
+          naturalnessFirst,
           personaProfile: persona?.profile ?? {},
           narratorProfile: settings?.narratorProfile ?? {},
           genreProfile: genre?.profile ?? {},
@@ -1281,54 +1535,314 @@ export async function POST(req: Request) {
 
         bodies = posts.map((p) => p.text);
 
-        try {
-          const reviewed = await reviewAndRewritePostsWithOpenAI({
-            platform,
-            personaProfile: persona?.profile ?? {},
-            narratorProfile: settings?.narratorProfile ?? {},
-            genreProfile: genre?.profile ?? {},
-            audience,
-            sources: Array.isArray(sources) ? sources : [],
-            posts: posts.map((p) => ({ text: p.text, sourcesUsed: p.sourcesUsed ?? [] })),
-          });
-          const maxLen = platform === "X" ? 260 : 900;
-          const reviewedBodies = reviewed.posts.map((p) => clampText(stripHashtags(p.textFinal), maxLen));
+        if (!naturalnessFirst) {
+          try {
+            const reviewed = await reviewAndRewritePostsWithOpenAI({
+              platform,
+              personaProfile: persona?.profile ?? {},
+              narratorProfile: settings?.narratorProfile ?? {},
+              genreProfile: genre?.profile ?? {},
+              audience,
+              sources: Array.isArray(sources) ? sources : [],
+              posts: posts.map((p) => ({
+                text: p.text,
+                sourcesUsed: p.sourcesUsed ?? [],
+                selectedFormatId: (p as any).selectedFormatId,
+                selectedFormatLabel: (p as any).selectedFormatLabel,
+              })),
+            });
+            const maxLen = platform === "X" ? 260 : 900;
+            const reviewedBodies = reviewed.posts.map((p) => clampText(stripHashtags(p.textFinal), maxLen));
 
-          // Keep evidenceQuote present in final text. If review removed it, fall back to the pre-review text.
-          const fixedBodies = reviewedBodies.map((t, i) => {
-            const quote = String((posts?.[i] as any)?.evidenceQuote ?? "").trim();
-            if (!quote) return t;
-            if (String(t ?? "").includes(quote)) return t;
-            return clampText(stripHashtags(String((posts?.[i] as any)?.text ?? "")), maxLen);
-          });
+            // Keep evidenceQuote present in final text. If review removed it, fall back to the pre-review text.
+            const fixedBodies = reviewedBodies.map((t, i) => {
+              const quote = String((posts?.[i] as any)?.evidenceQuote ?? "").trim();
+              if (!quote) return t;
+              if (String(t ?? "").includes(quote)) return t;
+              return clampText(stripHashtags(String((posts?.[i] as any)?.text ?? "")), maxLen);
+            });
 
-          const stripOtherEvidenceQuotes = (text: string, myIndex: number) => {
-            let out = String(text ?? "");
-            const suffixes = ["", "。", "！", "!", "？", "?", "…", "...", "．", ".", "\n", "。\n", "！\n", "？\n", "?\n"];
-            for (let j = 0; j < (posts?.length ?? 0); j++) {
-              if (j === myIndex) continue;
-              const q = String((posts?.[j] as any)?.evidenceQuote ?? "").trim();
-              if (!q) continue;
-              for (const suf of suffixes) {
-                const v = `${q}${suf}`;
-                if (!v) continue;
-                if (out.includes(v)) out = out.split(v).join(" ");
-                const v2 = `\n${v}`;
-                if (out.includes(v2)) out = out.split(v2).join("\n");
+            const stripOtherEvidenceQuotes = (text: string, myIndex: number) => {
+              let out = String(text ?? "");
+              const suffixes = ["", "。", "！", "!", "？", "?", "…", "...", "．", ".", "\n", "。\n", "！\n", "？\n", "?\n"];
+              for (let j = 0; j < (posts?.length ?? 0); j++) {
+                if (j === myIndex) continue;
+                const q = String((posts?.[j] as any)?.evidenceQuote ?? "").trim();
+                if (!q) continue;
+                for (const suf of suffixes) {
+                  const v = `${q}${suf}`;
+                  if (!v) continue;
+                  if (out.includes(v)) out = out.split(v).join(" ");
+                  const v2 = `\n${v}`;
+                  if (out.includes(v2)) out = out.split(v2).join("\n");
+                }
               }
-            }
-            return out.replace(/\n\s*\n+/g, "\n").replace(/[ \t]{2,}/g, " ").trim();
+              return out.replace(/\n\s*\n+/g, "\n").replace(/[ \t]{2,}/g, " ").trim();
+            };
+
+            const cleanedBodies = fixedBodies.map((t, i) => {
+              const cleaned = stripOtherEvidenceQuotes(String(t ?? ""), i);
+              return clampText(stripHashtags(cleaned), maxLen);
+            });
+
+            bodies = cleanedBodies;
+            review = { changedCount: reviewed.changedCount, error: null };
+          } catch (e) {
+            review = { changedCount: 0, error: e instanceof Error ? e.message : "Unknown error" };
+          }
+        }
+
+        const applyMemoStyleHeuristics = (
+          text: string,
+          memos: string[],
+          opts?: { selectedFormatId?: number | null },
+        ) => {
+          let out = String(text ?? "");
+          const memoText = memos.map((m) => String(m ?? "").trim()).filter(Boolean).join("\n");
+          if (!memoText) return out;
+
+          const selectedFormatId = Number(opts?.selectedFormatId);
+          const hasSelectedFormat = Number.isInteger(selectedFormatId);
+          const isFormat1 = hasSelectedFormat && selectedFormatId === 1;
+          const isFormat6 = hasSelectedFormat && selectedFormatId === 6;
+          const allowMemoStructureOverrides = !hasSelectedFormat || isFormat6;
+
+          const wantsBullets =
+            allowMemoStructureOverrides && !isFormat1 && /箇条書き|箇条書|bullet|bullets/i.test(memoText);
+          const wantsConclusionReasonOne =
+            allowMemoStructureOverrides &&
+            !isFormat1 &&
+            /結論\s*→\s*理由\s*→\s*一言|結論.*理由.*一言/.test(memoText);
+          const wantsConclusionFirst =
+            (!isFormat1 && /結論から|結論→|結論\s*[:：]|先に結論/i.test(memoText)) || wantsConclusionReasonOne;
+          const wantsShortLines = /短文|テンポ|改行多め|改行/i.test(memoText);
+
+          const shortenBulletForThreads = (line: string) => {
+            if (platform !== "THREADS") return line;
+            const raw = String(line ?? "").trim();
+            if (!raw.startsWith("・")) return raw;
+            const body = raw.replace(/^・\s*/, "");
+            if (body.length <= 38) return `・${body}`;
+
+            const stripped = body
+              .replace(/^例えば[、,]\s*/g, "")
+              .replace(/^たとえば[、,]\s*/g, "")
+              .replace(/^実は[、,]\s*/g, "");
+
+            const cutBySentence = stripped.split(/[。．.!?！？]/)[0] ?? stripped;
+            const cutByComma = cutBySentence.split(/[、,]/)[0] ?? cutBySentence;
+            const trimmed = cutByComma.trim();
+            if (!trimmed) return `・${body}`;
+
+            const hardMax = 38;
+            const hard = trimmed.length > hardMax ? `${trimmed.slice(0, hardMax - 1)}…` : trimmed;
+            return `・${hard}`;
           };
 
-          const cleanedBodies = fixedBodies.map((t, i) => {
-            const cleaned = stripOtherEvidenceQuotes(String(t ?? ""), i);
-            return clampText(stripHashtags(cleaned), maxLen);
-          });
+          const parts = out
+            .split(/\n|。/g)
+            .map((s) => s.trim())
+            .filter(Boolean);
 
-          bodies = cleanedBodies;
-          review = { changedCount: reviewed.changedCount, error: null };
-        } catch (e) {
-          review = { changedCount: 0, error: e instanceof Error ? e.message : "Unknown error" };
+          if (wantsConclusionReasonOne && parts.length >= 2) {
+            const conclusion = parts[0] ?? "";
+            const reason = parts.slice(1, Math.min(parts.length, 4));
+            const one = parts.length >= 3 ? parts[parts.length - 1] : "";
+
+            const reasonLines = wantsBullets
+              ? reason.map((r) => (r.startsWith("・") ? r : `・${r}`))
+              : reason.map((r) => (r.startsWith("・") ? r : `・${r}`));
+
+            const reasonLinesTuned = reasonLines.map((l) => shortenBulletForThreads(l));
+
+            const useVisibleLabels = platform !== "THREADS";
+
+            const spacerBeforeBullets =
+              platform === "THREADS" && !useVisibleLabels && reasonLines.length > 0 ? "" : null;
+
+            const block = [
+              useVisibleLabels ? `結論：${conclusion}` : conclusion,
+              useVisibleLabels ? "理由：" : "",
+              spacerBeforeBullets,
+              ...reasonLinesTuned,
+              one
+                ? useVisibleLabels
+                  ? `一言：${one}`
+                  : platform === "THREADS"
+                    ? `\n${one}`
+                    : one
+                : "",
+            ]
+              .filter((v) => v !== null && v !== undefined)
+              .join("\n");
+
+            out = block;
+          }
+
+          if (wantsConclusionFirst) {
+            const lines = out.split(/\n/g).map((s) => s.trim()).filter(Boolean);
+            if (lines.length > 0 && platform !== "THREADS" && !/^結論[:：]/.test(lines[0])) {
+              lines[0] = `結論：${lines[0]}`;
+              out = lines.join("\n");
+            }
+          }
+
+          if (wantsBullets) {
+            const hasBullet = /(^|\n)\s*[・\-]/.test(out);
+            if (!hasBullet) {
+              const p2 = out.split(/。/).map((s) => s.trim()).filter(Boolean);
+              if (p2.length >= 3) {
+                const head = p2.shift()!;
+                const b1 = p2.shift()!;
+                const b2 = p2.shift()!;
+                const rest = p2.join("。 ");
+                out = [head + "。", `・${b1}`, `・${b2}`, rest ? rest + "。" : ""].filter(Boolean).join("\n");
+              }
+            }
+          }
+
+          if (wantsShortLines) {
+            out = out
+              .replace(/。\s*/g, "。\n")
+              .replace(/\n\s*\n+/g, "\n")
+              .trim();
+          }
+
+          return out;
+        };
+
+        // Apply memo-based heuristics to final bodies while preserving evidence quotes.
+        if (!naturalnessFirst && Array.isArray(postsForMeta) && Array.isArray(bodies)) {
+          const memoByHandle = new Map(
+            (Array.isArray(sources) ? sources : []).map((s: any) => [String(s?.handle ?? "").trim(), String(s?.memo ?? "")]),
+          );
+
+          const normalizeForContainsLocal = (s: string) =>
+            String(s ?? "")
+              .replace(/[\s\u3000]+/g, "")
+              .replace(/[「」『』【】\[\]（）()、。,.!！?？:：;；・\-—―_]/g, "");
+          const includesNormalizedLocal = (haystack: string, needle: string) => {
+            const h = normalizeForContainsLocal(haystack);
+            const n = normalizeForContainsLocal(needle);
+            if (!h || !n) return false;
+            return h.includes(n);
+          };
+
+          const applySelectedFormatLayout = (text: string, selectedFormatId: number) => {
+            let out = String(text ?? "").trim();
+            if (!out) return out;
+
+            // Format 1: 1-line hook (assertion) + short lines. Avoid bullets.
+            if (platform === "THREADS" && selectedFormatId === 1) {
+              out = out.replace(/[？?]/g, "");
+
+              const parts = out
+                .split(/\n|。/g)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              if (parts.length === 0) return out;
+
+              let hook = parts[0] ?? "";
+              hook = hook
+                .replace(/^[「『"“”]+/, "")
+                .replace(/[」』"“”]+$/g, "")
+                .replace(/(ですよね|だよね|よね|ですよ|だよ)/g, "")
+                .replace(/[。．\.]+\s*$/g, "")
+                .trim();
+              if (hook && !/[。．\.]$/.test(hook)) hook = `${hook}。`;
+              const rest = parts.slice(1);
+              const lines = [hook];
+
+              // Keep up to 3 short follow-up lines.
+              for (const s of rest) {
+                if (lines.length >= 4) break;
+                if (/^[・\-]/.test(s)) continue;
+                lines.push(s);
+              }
+
+              // Enforce hard ban words across the whole post for format 1.
+              out = lines
+                .map((l) =>
+                  String(l ?? "")
+                    .replace(/(ですよね|だよね|よね|ですよ|だよ)/g, "")
+                    .replace(/[ \t]{2,}/g, " ")
+                    .trim(),
+                )
+                .filter(Boolean)
+                .join("\n");
+            }
+
+            // Format 7: exactly 2 questions (top + end). Keep middle as short statements.
+            if (platform === "THREADS" && selectedFormatId === 7) {
+              const rawLines = out
+                .split("\n")
+                .map((l) => String(l ?? "").trim())
+                .filter(Boolean);
+
+              const normalizeQ = (s: string) => String(s ?? "").replace(/[？]/g, "?").trim();
+              const lines = rawLines.map(normalizeQ);
+
+              const qIdxs = lines
+                .map((l, i) => ({ l, i }))
+                .filter(({ l }) => l.includes("?"))
+                .map(({ i }) => i);
+
+              if (qIdxs.length >= 1) {
+                const firstQIdx = qIdxs[0]!;
+                const lastQIdx = qIdxs[qIdxs.length - 1]!;
+
+                for (const qi of qIdxs.slice(1, -1)) {
+                  lines[qi] = lines[qi].replace(/\?+/g, "。");
+                }
+
+                let headQ = lines[firstQIdx] ?? "";
+                headQ = headQ.replace(/[。．\.]+\s*$/g, "");
+                if (!headQ.endsWith("?")) headQ = `${headQ}?`;
+
+                const bodyLines = lines
+                  .filter((_, i) => i !== firstQIdx && i !== lastQIdx)
+                  .map((l) => l.replace(/\?+/g, "。").trim())
+                  .filter(Boolean);
+
+                let tailQ = (lines[lastQIdx] ?? "").replace(/[。．\.]+\s*$/g, "");
+                if (!tailQ.endsWith("?")) tailQ = `${tailQ}?`;
+                if (!tailQ || tailQ.length < 2) tailQ = "あなたは？";
+
+                out = [headQ, ...bodyLines.slice(0, 3), tailQ].join("\n");
+              } else {
+                // If no questions at all, add one at top and one at end.
+                const parts = out
+                  .split(/\n|。/g)
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                const body = parts.slice(0, 3);
+                out = ["みんなはどうする？", ...body, "あなたは？"].join("\n");
+              }
+            }
+
+            return out;
+          };
+
+          bodies = bodies.map((t, i) => {
+            const used = Array.isArray((postsForMeta as any)[i]?.sourcesUsed) ? (postsForMeta as any)[i].sourcesUsed : [];
+            const memos = used.map((u: any) => memoByHandle.get(String(u?.handle ?? "").trim()) ?? "");
+            const maxLen = platform === "X" ? 260 : 900;
+            const quote = String((postsForMeta as any)[i]?.evidenceQuote ?? "").trim();
+            const selectedFormatId = Number((postsForMeta as any)[i]?.selectedFormatId);
+            let out = applyMemoStyleHeuristics(String(t ?? ""), memos, { selectedFormatId });
+            out = applySelectedFormatLayout(out, Number.isInteger(selectedFormatId) ? selectedFormatId : -1);
+            out = clampText(stripHashtags(out), maxLen);
+            if (quote && !includesNormalizedLocal(String(out), quote)) {
+              const sep = platform === "THREADS" ? "\n\n" : "\n";
+              out = clampText(stripHashtags(`${String(out).trim()}${sep}${quote}`.trim()), maxLen);
+            }
+            return out;
+          });
+        }
+
+        if (naturalnessFirst && Array.isArray(bodies)) {
+          const maxLen = platform === "X" ? 260 : 900;
+          bodies = bodies.map((t) => clampText(stripHashtags(String(t ?? "")), maxLen));
         }
 
         styleAppliedSummary = posts
@@ -1347,7 +1861,22 @@ export async function POST(req: Request) {
         sourcesUsedSummary = Array.from(counts.entries())
           .map(([handle, c]) => ({ handle, count: c }))
           .sort((a, b) => b.count - a.count)
-          .slice(0, 5);
+          .slice(0, 10);
+
+        const formatCounts = new Map<string, { id: number; label: string; count: number }>();
+        for (const p of posts) {
+          const id = Number((p as any)?.selectedFormatId);
+          const label = String((p as any)?.selectedFormatLabel ?? "").trim();
+          if (!Number.isInteger(id) || !label) continue;
+          const key = `${id}::${label}`;
+          const prev = formatCounts.get(key);
+          if (prev) {
+            prev.count++;
+          } else {
+            formatCounts.set(key, { id, label, count: 1 });
+          }
+        }
+        selectedFormatsSummary = Array.from(formatCounts.values()).sort((a, b) => b.count - a.count);
 
         generator = "openai";
       } catch (e) {
@@ -1356,10 +1885,11 @@ export async function POST(req: Request) {
         postsForMeta = null;
         sourcesUsedSummary = [];
         styleAppliedSummary = [];
+        selectedFormatsSummary = [];
         review = { changedCount: 0, error: null };
         themesUsed = [];
         enforceEvidenceUsed = null;
-        strictError = null;
+        strictError = llmError;
         generator = "mock";
       }
     }
@@ -1454,6 +1984,14 @@ export async function POST(req: Request) {
         sources: Number(sourcesCount ?? 0) > 0,
       },
       sourcesUsed: sourcesUsedSummary,
+      selectedFormats: selectedFormatsSummary,
+      selectedFormatsPerPost:
+        generator === "openai" && Array.isArray(postsForMeta)
+          ? postsForMeta.map((p) => ({
+              selectedFormatId: Number((p as any)?.selectedFormatId),
+              selectedFormatLabel: String((p as any)?.selectedFormatLabel ?? "").trim() || null,
+            }))
+          : null,
       styleApplied: styleAppliedSummary,
       ids: {
         personaId: personaId || null,
@@ -1507,6 +2045,9 @@ export async function POST(req: Request) {
             if (out.includes(v2)) out = out.split(v2).join("\n");
           }
         }
+        if (platform === "THREADS") {
+          return out.replace(/\n\s*\n{2,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
+        }
         return out.replace(/\n\s*\n+/g, "\n").replace(/[ \t]{2,}/g, " ").trim();
       };
 
@@ -1514,7 +2055,8 @@ export async function POST(req: Request) {
         const myQuote = String((postsForMeta?.[myIndex] as any)?.evidenceQuote ?? "").trim();
         if (!myQuote) return text;
         if (String(text ?? "").includes(myQuote)) return text;
-        return `${String(text ?? "").trim()}\n${myQuote}`.trim();
+        const sep = platform === "THREADS" ? "\n\n" : "\n";
+        return `${String(text ?? "").trim()}${sep}${myQuote}`.trim();
       };
 
       const cleanupArtifactsFinal = (text: string) => {
@@ -1531,7 +2073,11 @@ export async function POST(req: Request) {
         out = out.replace(/[。．\.][ \t]*[。．\.]+/g, "。");
         // Normalize spaces around punctuation.
         out = out.replace(/[ \t]+([。．\.、,!?！？?？])/g, "$1");
-        out = out.replace(/\n\s*\n+/g, "\n").trim();
+        if (platform === "THREADS") {
+          out = out.replace(/\n\s*\n{2,}/g, "\n\n").trim();
+        } else {
+          out = out.replace(/\n\s*\n+/g, "\n").trim();
+        }
         return out;
       };
 

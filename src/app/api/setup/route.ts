@@ -23,14 +23,6 @@ type SetupBody = {
   }>;
 };
 
-function parseJsonOrThrow(value: string, fieldName: string) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    throw new Error(`${fieldName} must be valid JSON`);
-  }
-}
-
 function normalizeHandle(input: string) {
   const raw = String(input ?? "").trim();
   if (!raw) return "";
@@ -60,23 +52,26 @@ export async function POST(req: Request) {
 
     const timezone = String(body.timezone ?? "Asia/Tokyo").trim() || "Asia/Tokyo";
 
-    const postingTargets = Array.isArray(body.postingTargets)
+    const postingTargetsRaw = Array.isArray(body.postingTargets)
       ? body.postingTargets.filter((p): p is Platform => p === "X" || p === "THREADS")
       : [];
 
-    const personaProfileJson = String(body.personaProfileJson ?? "{}").trim() || "{}";
-    const personaProfile = parseJsonOrThrow(personaProfileJson, "personaProfileJson");
+    const postingTargets: Platform[] = postingTargetsRaw.length > 0 ? postingTargetsRaw : ["X", "THREADS"];
 
     const narratorProfileJsonRaw = body.narratorProfileJson;
-    const narratorProfileJson = narratorProfileJsonRaw === undefined ? null : String(narratorProfileJsonRaw ?? "{}").trim();
-    const narratorProfile = narratorProfileJson ? parseJsonOrThrow(narratorProfileJson, "narratorProfileJson") : null;
-
-    const genreKeyRaw = body.genreKey;
-    const genreKey = String(genreKeyRaw ?? "").trim();
-    const hasGenre = Boolean(genreKey);
-
-    const genreProfileJson = hasGenre ? String(body.genreProfileJson ?? "{}").trim() || "{}" : null;
-    const genreProfile = genreProfileJson ? parseJsonOrThrow(genreProfileJson, "genreProfileJson") : null;
+    const narratorProfileJson =
+      narratorProfileJsonRaw === undefined ? null : String(narratorProfileJsonRaw ?? "{}").trim();
+    let narratorProfile: unknown = null;
+    if (narratorProfileJson) {
+      try {
+        narratorProfile = JSON.parse(narratorProfileJson);
+      } catch {
+        return NextResponse.json(
+          { ok: false, error: "narratorProfileJson must be valid JSON" },
+          { status: 400 },
+        );
+      }
+    }
 
     const sourceAccountsInput = Array.isArray(body.sourceAccounts) ? body.sourceAccounts : [];
     const sourceAccounts = sourceAccountsInput
@@ -96,32 +91,14 @@ export async function POST(req: Request) {
       },
     });
 
-    const persona = await prisma.persona.create({
-      data: {
-        workspaceId: workspace.id,
-        version: 1,
-        profile: personaProfile,
-      },
-    });
-
-    const genre = hasGenre
-      ? await prisma.genre.create({
-          data: {
-            workspaceId: workspace.id,
-            key: genreKey,
-            profile: genreProfile ?? {},
-          },
-        })
-      : null;
-
     await prisma.workspaceSettings.create({
       data: {
         workspaceId: workspace.id,
         timezone,
         postingTargets,
-        fixedPersonaId: persona.id,
-        defaultGenreId: genre?.id ?? null,
-        narratorProfile,
+        fixedPersonaId: null,
+        defaultGenreId: null,
+        narratorProfile: narratorProfile as any,
       },
     });
 
@@ -143,8 +120,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       workspaceId: workspace.id,
-      personaId: persona.id,
-      genreId: genre?.id ?? null,
+      personaId: null,
+      genreId: null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
