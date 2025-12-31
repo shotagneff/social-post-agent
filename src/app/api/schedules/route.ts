@@ -5,9 +5,16 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
+    const now = new Date();
     const schedules = await prisma.schedule.findMany({
+      where: {
+        status: { in: ["waiting", "posting", "failed"] },
+        OR: [{ isConfirmed: true }, { draftId: { not: null } }],
+        // Keep due items (past scheduledAt) visible; hide only history.
+        scheduledAt: { gte: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7) },
+      },
       orderBy: { scheduledAt: "asc" },
-      take: 50,
+      take: 200,
       select: {
         id: true,
         draftId: true,

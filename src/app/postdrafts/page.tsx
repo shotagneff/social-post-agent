@@ -179,6 +179,11 @@ export default function PostDraftsPage() {
   const [importError, setImportError] = useState<string>("");
   const [importNotice, setImportNotice] = useState<string>("");
 
+  const [importAutoAssign, setImportAutoAssign] = useState(true);
+  const [assignWorking, setAssignWorking] = useState(false);
+  const [assignError, setAssignError] = useState<string>("");
+  const [assignNotice, setAssignNotice] = useState<string>("");
+
   const canRun = Boolean(workspaceId.trim());
 
   const importedParts = useMemo(() => {
@@ -532,6 +537,8 @@ export default function PostDraftsPage() {
     setImportWorking(true);
     setImportError("");
     setImportNotice("");
+    setAssignError("");
+    setAssignNotice("");
 
     setRecentBaselineIds(items.map((x) => x.id));
     const startedAt = Date.now();
@@ -558,11 +565,58 @@ export default function PostDraftsPage() {
       setImportNotice(`取り込みました: ${created} 件`);
       setImportText("");
       await reload();
+
+      if (importAutoAssign && created > 0) {
+        await assignTempReservations({ limit: created });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";
       setImportError(`エラー: ${msg}`);
     } finally {
       setImportWorking(false);
+    }
+  }
+
+  async function assignTempReservations(args?: { limit?: number }) {
+    if (!canRun) return;
+    setAssignWorking(true);
+    setAssignError("");
+    setAssignNotice("");
+    try {
+      const limit = Math.max(1, Math.min(200, Number(args?.limit ?? importedParts.length ?? 30) || 30));
+      const res = await fetch("/api/scheduling/assign", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          platform,
+          limit,
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as any;
+      if (!json?.ok) {
+        setAssignError(`エラー: ${json?.error ?? "不明なエラー"}`);
+        return;
+      }
+
+      const assigned = Number(json.assigned ?? 0) || 0;
+      const hint = typeof json.hint === "string" ? json.hint : "";
+      const reason = typeof json.reason === "string" ? json.reason : "";
+      const diag = json?.diagnostics ? JSON.stringify(json.diagnostics) : "";
+
+      if (assigned === 0) {
+        setAssignNotice(`仮予約できませんでした（0件）。${hint || `reason=${reason || "unknown"}`}${diag ? ` ${diag}` : ""}`);
+        await reload();
+        return;
+      }
+
+      setAssignNotice(`仮予約を作成しました: ${assigned} 件${diag ? ` ${diag}` : ""}`);
+      await reload();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "不明なエラー";
+      setAssignError(`エラー: ${msg}`);
+    } finally {
+      setAssignWorking(false);
     }
   }
 
@@ -718,7 +772,7 @@ export default function PostDraftsPage() {
     if (detailIsDirty) return "未保存の変更があります。保存してから確定してください。";
     if (detail.status === "CONFIRMED") return "この投稿はすでに確定済みです。";
     if (detail.status !== "TEMP_SCHEDULED") {
-      return "まだ仮予約になっていません。先に『大量生成して仮予約を作成』を実行してください（投稿枠が無い場合は /setup で投稿枠を生成）。";
+      return "まだ仮予約になっていません。先に『仮予約を作成』を実行してください（投稿枠が無い場合は /setup で投稿枠を生成）。";
     }
     return "";
   }, [detail, detailConfirming, detailIsDirty, detailSaving, threadsTooLongReason]);
@@ -726,7 +780,7 @@ export default function PostDraftsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">PostDraft</h1>
+        <h1 className="text-2xl font-semibold">投稿下書き</h1>
         <Link href="/schedules" className="text-sm underline">
           予約へ
         </Link>
@@ -738,7 +792,7 @@ export default function PostDraftsPage() {
         <div>
           <div className="text-sm font-semibold">参考投稿を貼り付けて取り込む（おすすめ）</div>
           <div className="mt-1 text-xs text-zinc-600">
-            外部ツールで作った投稿文をまとめて貼り付けて、PostDraftとして取り込み→詳細で編集→確定できます。
+            外部ツールで作った投稿文をまとめて貼り付けて、投稿下書きとして取り込み→詳細で編集→確定できます。
             区切りは「空行が2つ以上」または「---」の行です。
           </div>
         </div>
@@ -836,9 +890,34 @@ export default function PostDraftsPage() {
               setImportText("");
               setImportError("");
               setImportNotice("");
+              setAssignError("");
+              setAssignNotice("");
             }}
           >
             クリア
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <label className="flex items-center gap-2 text-xs text-zinc-700">
+            <input
+              type="checkbox"
+              checked={importAutoAssign}
+              onChange={(e) => setImportAutoAssign(e.target.checked)}
+              disabled={importWorking || assignWorking}
+            />
+            取り込み後に自動で仮予約を作成する
+          </label>
+
+          <button
+            className="spa-button-secondary disabled:opacity-50"
+            disabled={!canRun || importWorking || assignWorking}
+            onClick={() => assignTempReservations()}
+          >
+            <span className="inline-flex items-center gap-2">
+              {assignWorking ? <Spinner /> : null}
+              <span>{assignWorking ? "仮予約作成中..." : "仮予約を作成"}</span>
+            </span>
           </button>
         </div>
 
@@ -848,12 +927,17 @@ export default function PostDraftsPage() {
             {importNotice}
           </div>
         ) : null}
+
+        {assignError ? <div className="rounded-xl border bg-white p-3 text-sm text-red-700">{assignError}</div> : null}
+        {assignNotice ? (
+          <div className="rounded-xl border bg-white p-3 text-sm text-zinc-800">{assignNotice}</div>
+        ) : null}
       </div>
 
       <div className="spa-card p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold">PostDraft一覧（最新100件）</div>
+            <div className="text-sm font-semibold">投稿下書き一覧（最新100件）</div>
             <div className="mt-1 text-xs text-zinc-600">
               全件: {items.length} / 表示中: {visibleItems.length}
             </div>
@@ -974,7 +1058,7 @@ export default function PostDraftsPage() {
                           <td className="px-3 py-2">
                             <button
                               className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-zinc-50 disabled:opacity-50"
-                              disabled={working}
+                              disabled={detailLoading || detailSaving || detailConfirming}
                               onClick={() => openDetail(it.id)}
                             >
                               開く
@@ -998,21 +1082,21 @@ export default function PostDraftsPage() {
         </div>
 
         {detailOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDetailOpen(false)}>
-            <div
-              className="w-full max-w-3xl rounded-2xl bg-white shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="spa-overlay" onClick={() => setDetailOpen(false)}>
+            <div className="spa-modal max-w-2xl" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-start justify-between border-b p-4">
                 <div>
-                  <div className="text-sm font-semibold">PostDraft 詳細</div>
+                  <div className="text-sm font-semibold">投稿下書き 詳細</div>
                   {detail ? (
                     <div className="mt-1 text-xs text-zinc-600">
                       {detail.platform} / {detail.status} / 投稿予定: {fmt(detail.tempScheduledAt || detail.slot?.scheduledAt || null)}
                     </div>
                   ) : null}
                 </div>
-                <button className="rounded-lg border px-3 py-1.5 text-sm hover:bg-zinc-50" onClick={() => setDetailOpen(false)}>
+                <button
+                  className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-zinc-50"
+                  onClick={() => setDetailOpen(false)}
+                >
                   閉じる
                 </button>
               </div>

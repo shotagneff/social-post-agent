@@ -18,6 +18,17 @@ function isPlatform(value: unknown): value is Platform {
   return value === "X" || value === "THREADS";
 }
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isTransientDbError(err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /Transaction not found|Server has closed the connection|ECONNRESET|Connection terminated unexpectedly|terminating connection/i.test(
+    msg,
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as AssignBody;
@@ -130,52 +141,64 @@ export async function POST(req: Request) {
     const results: Array<{ slotId: string; postDraftId: string; scheduleId: string }> = [];
 
     for (const p of pairs) {
-      const r = await prismaAny.$transaction(async (tx: any) => {
-        const claimed = await tx.schedulingSlot.updateMany({
-          where: { id: p.slotId, assignedPostDraftId: null },
-          data: { assignedPostDraftId: p.postDraftId },
-        });
+      let r: null | { scheduleId: string } = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          r = await prismaAny.$transaction(async (tx: any) => {
+            const claimed = await tx.schedulingSlot.updateMany({
+              where: { id: p.slotId, assignedPostDraftId: null },
+              data: { assignedPostDraftId: p.postDraftId },
+            });
 
-        if (claimed.count === 0) {
-          return null;
-        }
+            if (claimed.count === 0) {
+              return null;
+            }
 
-        const existing = await tx.schedule.findFirst({
-          where: { slotId: p.slotId },
-          select: { id: true },
-        });
+            const existing = await tx.schedule.findFirst({
+              where: { slotId: p.slotId },
+              select: { id: true },
+            });
 
-        if (existing) {
-          // Slot is already used; revert claim.
-          await tx.schedulingSlot.updateMany({
-            where: { id: p.slotId, assignedPostDraftId: p.postDraftId },
-            data: { assignedPostDraftId: null },
+            if (existing) {
+              // Slot is already used; revert claim.
+              await tx.schedulingSlot.updateMany({
+                where: { id: p.slotId, assignedPostDraftId: p.postDraftId },
+                data: { assignedPostDraftId: null },
+              });
+              return null;
+            }
+
+            await tx.postDraft.update({
+              where: { id: p.postDraftId },
+              data: {
+                status: "TEMP_SCHEDULED",
+                tempScheduledAt: p.scheduledAt,
+              },
+            });
+
+            const schedule = await tx.schedule.create({
+              data: {
+                postDraftId: p.postDraftId,
+                platform: p.platform as any,
+                scheduledAt: p.scheduledAt,
+                status: "waiting",
+                isConfirmed: false,
+                slotId: p.slotId,
+              },
+              select: { id: true },
+            });
+
+            return { scheduleId: schedule.id };
           });
-          return null;
+          break;
+        } catch (e) {
+          if (attempt < 2 && isTransientDbError(e)) {
+            await sleep(200 * (attempt + 1));
+            continue;
+          }
+          throw e;
         }
-
-        await tx.postDraft.update({
-          where: { id: p.postDraftId },
-          data: {
-            status: "TEMP_SCHEDULED",
-            tempScheduledAt: p.scheduledAt,
-          },
-        });
-
-        const schedule = await tx.schedule.create({
-          data: {
-            postDraftId: p.postDraftId,
-            platform: p.platform as any,
-            scheduledAt: p.scheduledAt,
-            status: "waiting",
-            isConfirmed: false,
-            slotId: p.slotId,
-          },
-          select: { id: true },
-        });
-
-        return { scheduleId: schedule.id };
-      });
+      }
 
       if (r) {
         assigned += 1;

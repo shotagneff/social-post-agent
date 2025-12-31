@@ -619,7 +619,7 @@ export default function SetupPage() {
           <div className="mt-1 text-sm text-zinc-600">投稿先の作成/選択と、投稿枠（コアタイム等）の設定を行います。</div>
         </div>
         <Link href="/postdrafts" className="spa-button-secondary">
-          PostDraftへ
+          投稿下書きへ
         </Link>
       </div>
 
@@ -983,33 +983,48 @@ export default function SetupPage() {
 
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
               <button
+                className="spa-button-secondary disabled:opacity-50"
+                disabled={policySaving || slotGenerating}
+                onClick={() => {
+                  const preferred = postingTargets.includes("X")
+                    ? "X"
+                    : postingTargets.includes("THREADS")
+                      ? "THREADS"
+                      : "X";
+                  router.push(`/postdrafts?workspaceId=${encodeURIComponent(workspaceId)}&platform=${preferred}`);
+                }}
+              >
+                投稿下書きへ進む
+              </button>
+
+              <button
                 className="spa-button-primary disabled:opacity-50"
                 disabled={policySaving || slotGenerating}
                 onClick={async () => {
                   await saveSchedulingPolicy();
                   const r = await generateSlots();
                   if (!r) return;
-                  if (r.created <= 0 && r.requested <= 0) return;
+
+                  if (r.requested <= 0) {
+                    setSlotResult("投稿枠の生成数が 0 になりました（requested=0）。1日あたり上限や対象期間を見直してください。");
+                  }
+
                   const preferred = postingTargets.includes("X")
                     ? "X"
                     : postingTargets.includes("THREADS")
                       ? "THREADS"
                       : "X";
-                  router.push(
-                    `/postdrafts?workspaceId=${encodeURIComponent(workspaceId)}&platform=${encodeURIComponent(preferred)}`,
-                  );
+                  router.push(`/postdrafts?workspaceId=${encodeURIComponent(workspaceId)}&platform=${preferred}`);
                 }}
               >
-                {policySaving || slotGenerating ? "実行中..." : "保存して投稿枠を生成 → PostDraftへ"}
+                {policySaving || slotGenerating ? "実行中..." : "保存して投稿枠を生成 → 投稿下書きへ"}
               </button>
             </div>
 
-            {policyResult ? <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">{policyResult}</div> : null}
-            {slotResult ? <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">{slotResult}</div> : null}
+            {policyResult ? <div className="text-sm text-zinc-700">{policyResult}</div> : null}
+            {slotResult ? <div className="text-sm text-zinc-700">{slotResult}</div> : null}
           </div>
         ) : null}
-
-        {result ? <div className="rounded-xl border border-zinc-200 bg-white p-3 text-sm">{result}</div> : null}
-      </div>
+    </div>
   );
 }
