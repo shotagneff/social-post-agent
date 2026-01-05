@@ -839,9 +839,7 @@ export default function PostDraftsPage() {
             {workspacesError ? <div className="text-xs text-red-700">{workspacesError}</div> : null}
             <div className="text-xs text-zinc-600">
               {workspaceId ? (
-                <span>
-                  workspaceId: <span className="font-mono">{workspaceId}</span>
-                </span>
+                <span>投稿設計が選択されています。</span>
               ) : (
                 <span>
                   まだ投稿先が無い場合は <Link className="underline" href="/setup">/setup</Link> で作成してください。
@@ -1100,7 +1098,7 @@ export default function PostDraftsPage() {
           </div>
 
           <div className="text-xs text-zinc-600">
-            行の「開く」で全文を確認・編集してから確定できます。確定したものだけが投稿対象になります（cronは確定済みのみ処理）。
+            行の「開く」で全文を確認・編集してから確定できます。確定したものだけが投稿対象になります。
           </div>
         </div>
 
