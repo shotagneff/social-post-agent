@@ -82,13 +82,12 @@ export default function SchedulesPage() {
   const [clearingFailed, setClearingFailed] = useState(false);
   const [clearFailedResult, setClearFailedResult] = useState<string>("");
 
-  async function load(explicitWorkspaceId?: string) {
+  async function load() {
     setLoading(true);
     setError("");
     const search = typeof window !== "undefined" ? window.location.search : "";
     const params = new URLSearchParams(search);
-    const fromQuery = String(params.get("workspaceId") ?? "").trim();
-    const workspaceId = String(explicitWorkspaceId ?? fromQuery ?? "").trim();
+    const workspaceId = String(params.get("workspaceId") ?? "").trim();
     if (workspaceId) setCurrentWorkspaceId(workspaceId);
 
     const url = workspaceId
@@ -102,6 +101,11 @@ export default function SchedulesPage() {
       setLoading(false);
       return;
     }
+
+    setSchedules((json.schedules ?? []) as Schedule[]);
+    setLastLoadedAtIso(new Date().toISOString());
+    setLoading(false);
+  }
 
   // ワークスペース一覧を取得して、プルダウン用に保持
   useEffect(() => {
@@ -138,11 +142,6 @@ export default function SchedulesPage() {
       canceled = true;
     };
   }, []);
-
-    setSchedules((json.schedules ?? []) as Schedule[]);
-    setLastLoadedAtIso(new Date().toISOString());
-    setLoading(false);
-  }
 
   async function loadCronStatus() {
     try {
@@ -376,7 +375,7 @@ export default function SchedulesPage() {
                   else url.searchParams.delete("workspaceId");
                   window.history.pushState(null, "", url.toString());
                 }
-                void load(id || undefined);
+                void load();
               }}
             >
               <option value="">選択してください</option>
@@ -490,7 +489,7 @@ export default function SchedulesPage() {
           {tickResult ? <div className="text-sm">{tickResult}</div> : null}
           {cancelResult ? <div className="text-sm">{cancelResult}</div> : null}
           {clearFailedResult ? <div className="text-sm">{clearFailedResult}</div> : null}
-          <button className="spa-button-secondary" disabled={loading} onClick={load}>
+          <button className="spa-button-secondary" disabled={loading} onClick={() => void load()}>
             再読み込み
           </button>
         </div>
