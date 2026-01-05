@@ -51,6 +51,8 @@ export default function SchedulesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string>("");
+
   const [lastLoadedAtIso, setLastLoadedAtIso] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(false);
 
@@ -77,6 +79,7 @@ export default function SchedulesPage() {
     const search = typeof window !== "undefined" ? window.location.search : "";
     const params = new URLSearchParams(search);
     const workspaceId = String(params.get("workspaceId") ?? "").trim();
+    setCurrentWorkspaceId(workspaceId);
     const url = workspaceId ? `/api/schedules?workspaceId=${encodeURIComponent(workspaceId)}` : "/api/schedules";
 
     const res = await fetch(url);
@@ -293,29 +296,45 @@ export default function SchedulesPage() {
   }
 
   return (
-    <div className="space-y-4">
-        <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
           <h1 className="text-2xl font-semibold">予約</h1>
-          <Link className="text-sm text-zinc-700 underline" href="/drafts">
-            下書きへ
-          </Link>
-        </div>
-
-        <div className="spa-card p-4">
-          <div className="text-sm font-semibold">次のステップ</div>
-          <div className="mt-1 text-xs text-zinc-600">投稿下書きを取り込み → 確定 → 予約、の順で進めます。</div>
-          <div className="mt-3 flex flex-col gap-2 md:flex-row">
-            <Link className="spa-button-primary text-center" href="/postdrafts">
-              投稿案の作成へ
-            </Link>
+          <div className="mt-1 text-sm text-zinc-600">Threads / X の予約状況を確認し、必要に応じて手動実行やキャンセルを行います。</div>
+          <div className="mt-1 text-xs text-zinc-500">
+            {currentWorkspaceId
+              ? <>対象 workspaceId: <span className="font-mono">{currentWorkspaceId}</span></>
+              : "workspaceId が指定されていないため、全ワークスペースの予約が混在して表示されます（開発/デバッグ用）。"}
           </div>
         </div>
-
-        <div className="spa-card p-4 text-sm text-zinc-700">
-          確定済みの予約のみを一覧で確認できます。未確定（仮予約）や投稿済み履歴は表示しません。
+        <div className="flex flex-col items-end gap-1 text-xs text-zinc-600">
+          <div>{cronModeText}</div>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+            />
+            自動更新（10秒）
+          </label>
         </div>
+      </div>
 
-        <div className="spa-card p-4 text-sm">
+      <div className="spa-card p-4">
+        <div className="text-sm font-semibold">次のステップ</div>
+        <div className="mt-1 text-xs text-zinc-600">投稿下書きを取り込み → 確定 → 予約、の順で進めます。</div>
+        <div className="mt-3 flex flex-col gap-2 md:flex-row">
+          <Link className="spa-button-primary text-center" href="/postdrafts">
+            投稿案の作成へ
+          </Link>
+        </div>
+      </div>
+
+      <div className="spa-card p-4 text-sm text-zinc-700">
+        確定済みの予約のみを一覧で確認できます。未確定（仮予約）や投稿済み履歴は表示しません。
+      </div>
+
+      <div className="spa-card p-4 text-sm">
           <div className="font-medium">{cronModeText}</div>
           {cronSecretConfigured ? (
             <div className="mt-1 text-xs text-zinc-600">

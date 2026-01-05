@@ -185,9 +185,9 @@ function addDaysYmd(ymd: string, days: number) {
 
 export default function SetupPage() {
   const router = useRouter();
-  const [workspaceName, setWorkspaceName] = useState("マイ投稿設計");
+  const [workspaceName, setWorkspaceName] = useState("");
   const [timezone, setTimezone] = useState("Asia/Tokyo");
-  const [postingTargets, setPostingTargets] = useState<Platform[]>(["X", "THREADS"]);
+  const [postingTargets, setPostingTargets] = useState<Platform[]>(["THREADS"]);
 
   const [existingPostingTargets, setExistingPostingTargets] = useState<Platform[]>(["X", "THREADS"]);
   const [existingTargetsSaving, setExistingTargetsSaving] = useState(false);
@@ -735,7 +735,7 @@ export default function SetupPage() {
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <label className="space-y-1">
-                    <div className="text-sm font-medium">投稿設計の名前</div>
+                    <div className="text-sm font-medium">使用するアカウントのユーザー名</div>
                     <input
                       className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                       value={workspaceName}

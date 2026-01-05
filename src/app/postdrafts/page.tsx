@@ -681,6 +681,9 @@ export default function PostDraftsPage() {
       base = base.filter((it) => it.platform === listPlatformFilter);
     }
 
+    // 予定（仮予約）が入っていない下書きは一覧には表示しない
+    base = base.filter((it) => effectiveScheduledAt(it) !== null);
+
     return base;
   }, [items, listPlatformFilter, recentAfterIso, recentBaselineIds, recentOnly]);
 
