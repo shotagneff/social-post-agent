@@ -533,11 +533,13 @@ export default function SetupPage() {
   }
 
   function togglePostingTarget(p: Platform) {
-    setPostingTargets((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    // 投稿先は X / Threads のどちらか一つだけ選べるようにする
+    setPostingTargets([p]);
   }
 
   function toggleExistingPostingTarget(p: Platform) {
-    setExistingPostingTargets((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    // 既存ワークスペースも投稿先は一つだけに制限する
+    setExistingPostingTargets([p]);
   }
 
   async function saveExistingPostingTargets() {
