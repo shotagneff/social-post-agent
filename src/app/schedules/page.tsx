@@ -351,10 +351,7 @@ export default function SchedulesPage() {
           <div className="mt-1 text-sm text-zinc-600">Threads / X の予約状況を確認し、必要に応じて手動実行やキャンセルを行います。</div>
           <div className="mt-1 text-xs text-zinc-500">
             {currentWorkspaceId ? (
-              <>
-                表示中の投稿設計: {workspaces.find((w) => w.id === currentWorkspaceId)?.name ?? "(不明)"}
-                <span className="ml-2 font-mono text-[11px] text-zinc-500">{currentWorkspaceId}</span>
-              </>
+              <>表示中の投稿設計: {workspaces.find((w) => w.id === currentWorkspaceId)?.name ?? "(不明)"}</>
             ) : (
               "表示中の投稿設計が選択されていません。下のプルダウンから選択してください。"
             )}
@@ -381,7 +378,7 @@ export default function SchedulesPage() {
               <option value="">選択してください</option>
               {workspaces.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.name} ({w.id.slice(0, 8)}...)
+                  {w.name}
                 </option>
               ))}
             </select>
