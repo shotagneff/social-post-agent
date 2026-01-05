@@ -82,14 +82,18 @@ export default function SchedulesPage() {
   const [clearingFailed, setClearingFailed] = useState(false);
   const [clearFailedResult, setClearFailedResult] = useState<string>("");
 
-  async function load() {
+  async function load(explicitWorkspaceId?: string) {
     setLoading(true);
     setError("");
     const search = typeof window !== "undefined" ? window.location.search : "";
     const params = new URLSearchParams(search);
-    const workspaceId = String(params.get("workspaceId") ?? "").trim();
-    setCurrentWorkspaceId(workspaceId);
-    const url = workspaceId ? `/api/schedules?workspaceId=${encodeURIComponent(workspaceId)}` : "/api/schedules";
+    const fromQuery = String(params.get("workspaceId") ?? "").trim();
+    const workspaceId = String(explicitWorkspaceId ?? fromQuery ?? "").trim();
+    if (workspaceId) setCurrentWorkspaceId(workspaceId);
+
+    const url = workspaceId
+      ? `/api/schedules?workspaceId=${encodeURIComponent(workspaceId)}`
+      : "/api/schedules";
 
     const res = await fetch(url);
     const json = (await res.json().catch(() => null)) as any;
@@ -118,18 +122,6 @@ export default function SchedulesPage() {
           ? (json.workspaces as WorkspaceItem[])
           : [];
         setWorkspaces(list);
-
-        // URL に workspaceId が無い場合は、先頭のワークスペースをデフォルトにする
-        const search = typeof window !== "undefined" ? window.location.search : "";
-        const params = new URLSearchParams(search);
-        const fromQuery = String(params.get("workspaceId") ?? "").trim();
-        if (!fromQuery && list[0]?.id && !currentWorkspaceId) {
-          const id = list[0].id;
-          setCurrentWorkspaceId(id);
-          const url = new URL(window.location.href);
-          url.searchParams.set("workspaceId", id);
-          window.location.href = url.toString();
-        }
       })
       .catch((e) => {
         if (canceled) return;
@@ -145,7 +137,7 @@ export default function SchedulesPage() {
     return () => {
       canceled = true;
     };
-  }, [currentWorkspaceId]);
+  }, []);
 
     setSchedules((json.schedules ?? []) as Schedule[]);
     setLastLoadedAtIso(new Date().toISOString());
@@ -378,10 +370,13 @@ export default function SchedulesPage() {
               onChange={(e) => {
                 const id = e.target.value.trim();
                 setCurrentWorkspaceId(id);
-                const url = new URL(window.location.href);
-                if (id) url.searchParams.set("workspaceId", id);
-                else url.searchParams.delete("workspaceId");
-                window.location.href = url.toString();
+                if (typeof window !== "undefined") {
+                  const url = new URL(window.location.href);
+                  if (id) url.searchParams.set("workspaceId", id);
+                  else url.searchParams.delete("workspaceId");
+                  window.history.pushState(null, "", url.toString());
+                }
+                void load(id || undefined);
               }}
             >
               <option value="">選択してください</option>
