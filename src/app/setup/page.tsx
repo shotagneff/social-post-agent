@@ -305,12 +305,12 @@ export default function SetupPage() {
 
   const [policyStartDate, setPolicyStartDate] = useState<string>(ymdToday());
   const [policyEndDate, setPolicyEndDate] = useState<string>(addDaysYmd(ymdToday(), 30));
-  const [dailyLimitX, setDailyLimitX] = useState<number>(1);
-  const [dailyLimitThreads, setDailyLimitThreads] = useState<number>(0);
+  const [dailyLimitX, setDailyLimitX] = useState<number>(3);
+  const [dailyLimitThreads, setDailyLimitThreads] = useState<number>(3);
   const [minIntervalMinutes, setMinIntervalMinutes] = useState<number>(90);
   const [randomJitterMinutes, setRandomJitterMinutes] = useState<number>(15);
   const [coreTimeWindows, setCoreTimeWindows] = useState<CoreTimeWindow[]>([
-    { daysOfWeek: [1, 2, 3, 4, 5], startTime: "08:30", endTime: "10:30" },
+    { daysOfWeek: [1, 2, 3, 4, 5], startTime: "08:30", endTime: "21:00" },
   ]);
   const [policySaving, setPolicySaving] = useState(false);
   const [policyResult, setPolicyResult] = useState<string>("");
@@ -329,6 +329,12 @@ export default function SetupPage() {
 
   const canGoNextWorkspace = Boolean(workspaceName.trim() && timezone.trim());
   const canRun = canGoNextWorkspace;
+
+  const preferredPlatformForLink: Platform | null = useMemo(() => {
+    if (postingTargets.includes("THREADS")) return "THREADS";
+    if (postingTargets.includes("X")) return "X";
+    return null;
+  }, [postingTargets]);
 
   const stepOrder: SetupStep[] = ["workspace", "scheduling"];
   const currentIndex = Math.max(0, stepOrder.indexOf(step));
@@ -618,7 +624,16 @@ export default function SetupPage() {
           <h1 className="text-2xl font-semibold">予約投稿の設定</h1>
           <div className="mt-1 text-sm text-zinc-600">投稿先の作成/選択と、投稿枠（コアタイム等）の設定を行います。</div>
         </div>
-        <Link href="/postdrafts" className="spa-button-secondary">
+        <Link
+          href={
+            workspaceId
+              ? `/postdrafts?workspaceId=${encodeURIComponent(workspaceId)}${
+                  preferredPlatformForLink ? `&platform=${preferredPlatformForLink}` : ""
+                }`
+              : "/postdrafts"
+          }
+          className="spa-button-secondary"
+        >
           投稿下書きへ
         </Link>
       </div>
@@ -831,7 +846,7 @@ export default function SetupPage() {
               </div>
 
               <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                注意: 1日あたり上限は、Xは3件まで / Threadsは4件までを目安にしてください。
+                注意: 1日あたり上限は、X / Threads ともに3件までを目安にしてください。
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">

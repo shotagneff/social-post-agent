@@ -214,7 +214,7 @@ export default function ThreadsConnectPage() {
             <option value="">選択してください</option>
             {workspaces.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name} ({w.id.slice(0, 8)}...)
+                {w.name} ({w.id})
               </option>
             ))}
           </select>

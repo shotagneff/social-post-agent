@@ -54,7 +54,7 @@ export default function SchedulesPage() {
   const [lastLoadedAtIso, setLastLoadedAtIso] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(false);
 
-  const [statusFilter, setStatusFilter] = useState<"due" | "active" | "all">("active");
+  const [showUpcomingOnly, setShowUpcomingOnly] = useState(true);
 
   const [cronSecretConfigured, setCronSecretConfigured] = useState<boolean | null>(null);
 
@@ -74,8 +74,12 @@ export default function SchedulesPage() {
   async function load() {
     setLoading(true);
     setError("");
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    const params = new URLSearchParams(search);
+    const workspaceId = String(params.get("workspaceId") ?? "").trim();
+    const url = workspaceId ? `/api/schedules?workspaceId=${encodeURIComponent(workspaceId)}` : "/api/schedules";
 
-    const res = await fetch("/api/schedules");
+    const res = await fetch(url);
     const json = (await res.json().catch(() => null)) as any;
     if (!json?.ok) {
       setError(String(json?.error ?? "読み込みに失敗しました"));
@@ -134,21 +138,44 @@ export default function SchedulesPage() {
     return `${yyyy}-${mm}-${dd}`;
   }
 
+  function formatGroupTitle(key: string) {
+    if (key === "unknown") return "日付不明";
+    const d = new Date(`${key}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return key;
+    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+    const w = weekdays[d.getDay()] ?? "";
+    return `${key} (${w})`;
+  }
+
   const dueCount = schedules.filter((s) => isDue(s)).length;
   const waitingCount = schedules.filter((s) => s.status === "waiting").length;
   const postingCount = schedules.filter((s) => s.status === "posting").length;
   const postedCount = schedules.filter((s) => s.status === "posted").length;
 
   const visibleSchedules = useMemo(() => {
+    // 「本日以降」を基準にフィルタする（ローカルタイムの0時）
+    const todayThresholdMs = showUpcomingOnly
+      ? (() => {
+          const d = new Date();
+          d.setHours(0, 0, 0, 0);
+          return d.getTime();
+        })()
+      : null;
+
     return schedules.filter((s) => {
       const effectiveConfirmed = Boolean(s.isConfirmed || s.draftId);
       if (!effectiveConfirmed) return false;
       if (s.status === "posted") return false;
-      if (statusFilter === "all") return s.status === "waiting" || s.status === "posting" || s.status === "failed";
-      if (statusFilter === "due") return isDue(s);
-      return s.status === "waiting" || s.status === "posting";
+
+      if (todayThresholdMs !== null) {
+        const t = new Date(s.scheduledAt).getTime();
+        if (Number.isFinite(t) && t < todayThresholdMs) return false;
+      }
+
+      // 常に waiting/posting/failed を表示（posted は上で除外済み）
+      return s.status === "waiting" || s.status === "posting" || s.status === "failed";
     });
-  }, [schedules, statusFilter]);
+  }, [schedules, showUpcomingOnly]);
 
   const groupedVisibleSchedules = useMemo(() => {
     const groups = new Map<string, Schedule[]>();
@@ -169,7 +196,7 @@ export default function SchedulesPage() {
 
     return keys.map((k) => ({
       key: k,
-      title: k === "unknown" ? "日付不明" : k,
+      title: formatGroupTitle(k),
       items: (groups.get(k) ?? []).slice().sort((a, b) => {
         const ax = new Date(a.scheduledAt).getTime();
         const bx = new Date(b.scheduledAt).getTime();
@@ -324,23 +351,23 @@ export default function SchedulesPage() {
 
           <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
             <div className={`rounded-lg border p-3 ${dueCount > 0 ? "border-amber-300 bg-amber-50" : "bg-white"}`}>
-              <div className="text-xs text-zinc-600">due</div>
+              <div className="text-xs text-zinc-600">処理対象</div>
               <div className={`mt-1 text-2xl font-semibold ${dueCount > 0 ? "text-amber-900" : "text-zinc-900"}`}>{dueCount}</div>
             </div>
             <div className="rounded-lg border bg-white p-3">
-              <div className="text-xs text-zinc-600">waiting</div>
+              <div className="text-xs text-zinc-600">待機中</div>
               <div className="mt-1 text-2xl font-semibold text-zinc-900">{waitingCount}</div>
             </div>
             <div className={`rounded-lg border p-3 ${postingCount > 0 ? "border-zinc-300 bg-zinc-50" : "bg-white"}`}>
-              <div className="text-xs text-zinc-600">posting</div>
+              <div className="text-xs text-zinc-600">投稿中</div>
               <div className="mt-1 text-2xl font-semibold text-zinc-900">{postingCount}</div>
             </div>
             <div className={`rounded-lg border p-3 ${failedCount > 0 ? "border-red-300 bg-red-50" : "bg-white"}`}>
-              <div className="text-xs text-zinc-600">failed</div>
+              <div className="text-xs text-zinc-600">失敗</div>
               <div className={`mt-1 text-2xl font-semibold ${failedCount > 0 ? "text-red-700" : "text-zinc-900"}`}>{failedCount}</div>
             </div>
             <div className="rounded-lg border bg-white p-3">
-              <div className="text-xs text-zinc-600">posted</div>
+              <div className="text-xs text-zinc-600">投稿済み</div>
               <div className="mt-1 text-2xl font-semibold text-zinc-900">{postedCount}</div>
             </div>
           </div>
@@ -370,36 +397,29 @@ export default function SchedulesPage() {
 
         <div className="spa-card flex items-center justify-between p-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="font-medium">表示</div>
-            <button
-              className={`rounded-xl border px-3 py-1 text-sm ${statusFilter === "due" ? "bg-zinc-900 text-white" : "bg-white"}`}
-              onClick={() => setStatusFilter("due")}
-            >
-              処理対象（due）
-            </button>
-            <button
-              className={`rounded-xl border px-3 py-1 text-sm ${statusFilter === "active" ? "bg-zinc-900 text-white" : "bg-white"}`}
-              onClick={() => setStatusFilter("active")}
-            >
-              稼働中（waiting/posting）
-            </button>
-            <button
-              className={`rounded-xl border px-3 py-1 text-sm ${statusFilter === "all" ? "bg-zinc-900 text-white" : "bg-white"}`}
-              onClick={() => setStatusFilter("all")}
-            >
-              すべて（failed含む）
-            </button>
+            <div className="font-medium">表示</div>
+            <div className="text-xs text-zinc-600">すべての予約（failed を含む）が表示されています。</div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="text-xs text-zinc-600">failed: {failedCount} 件</div>
-            <button
-              className="spa-button-secondary disabled:opacity-50"
-              disabled={clearingFailed || failedCount === 0}
-              onClick={clearFailedSchedules}
-            >
-              {clearingFailed ? "failed削除中..." : "failedを一括削除"}
-            </button>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-xs text-zinc-700">
+              <input
+                type="checkbox"
+                checked={showUpcomingOnly}
+                onChange={(e) => setShowUpcomingOnly(e.target.checked)}
+              />
+              本日以降の予約投稿のみ表示
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-zinc-600">failed: {failedCount} 件</div>
+              <button
+                className="spa-button-secondary disabled:opacity-50"
+                disabled={clearingFailed || failedCount === 0}
+                onClick={clearFailedSchedules}
+              >
+                {clearingFailed ? "failed削除中..." : "failedを一括削除"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -418,8 +438,14 @@ export default function SchedulesPage() {
 
           {groupedVisibleSchedules.flatMap((g) => {
             const headerRow = (
-              <div key={`group-${g.key}`} className="border-b bg-zinc-50/70 px-3 py-2 text-xs font-semibold text-zinc-700">
-                {g.title}
+              <div
+                key={`group-${g.key}`}
+                className="mt-3 flex items-center gap-2 border-y border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold tracking-wide text-indigo-900"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-white text-[11px] text-indigo-700">
+                  📅
+                </span>
+                <span>{g.title}</span>
               </div>
             );
 
@@ -443,7 +469,7 @@ export default function SchedulesPage() {
 
               return (
                 <div key={s.id} className={`grid grid-cols-12 gap-2 border-b p-3 text-sm last:border-b-0 ${rowClass}`}>
-                  <div className="col-span-4 break-words">
+                  <div className="col-span-4 break-words text-[13px] text-zinc-800">
                     {s.draft?.theme
                       ? s.draft.theme
                       : s.postDraft?.body
@@ -451,20 +477,58 @@ export default function SchedulesPage() {
                         : "（内容なし）"}
                   </div>
                   <div className="col-span-2">{s.platform}</div>
-                  <div className="col-span-2 text-xs">{new Date(s.scheduledAt).toLocaleString()}</div>
+                  <div className="col-span-2 text-sm font-semibold text-zinc-900">
+                    {(() => {
+                      const d = new Date(s.scheduledAt);
+                      if (Number.isNaN(d.getTime())) return "-";
+                      const hh = String(d.getHours()).padStart(2, "0");
+                      const mm = String(d.getMinutes()).padStart(2, "0");
+                      return `${hh}:${mm}`;
+                    })()}
+                  </div>
                   <div className="col-span-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {due ? (
                         <span className="inline-flex items-center rounded-full bg-amber-600 px-2 py-0.5 text-[11px] font-semibold text-white">
                           due
                         </span>
                       ) : null}
-                      <span className={due ? "font-semibold text-amber-900" : ""}>{s.status}</span>
+                      <span
+                        className={
+                          s.status === "waiting"
+                            ? "inline-flex items-center rounded-full bg-sky-500 px-2 py-0.5 text-[11px] font-semibold text-white" // 待機中
+                            : s.status === "posting"
+                              ? "inline-flex items-center rounded-full bg-orange-500 px-2 py-0.5 text-[11px] font-semibold text-white" // 投稿中
+                              : s.status === "failed"
+                                ? "inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white" // 失敗
+                                : s.status === "posted"
+                                  ? "inline-flex items-center rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-semibold text-white" // 投稿済み
+                                  : "inline-flex items-center rounded-full bg-zinc-600 px-2 py-0.5 text-[11px] font-semibold text-white" // その他
+                        }
+                      >
+                        {s.status === "waiting"
+                          ? "待機中"
+                          : s.status === "posting"
+                            ? "投稿中"
+                            : s.status === "failed"
+                              ? "失敗"
+                              : s.status === "posted"
+                                ? "投稿済み"
+                                : s.status}
+                      </span>
                     </div>
                     {!effectiveConfirmed ? <div className="mt-1 text-xs text-zinc-600">（未確定）</div> : null}
                   </div>
-                  <div className="col-span-1 text-xs">
-                    {s.published ? new Date(s.published.postedAt).toLocaleString() : "-"}
+                  <div className="col-span-1 text-sm font-semibold text-zinc-900">
+                    {s.published
+                      ? (() => {
+                          const d = new Date(s.published!.postedAt);
+                          if (Number.isNaN(d.getTime())) return "-";
+                          const hh = String(d.getHours()).padStart(2, "0");
+                          const mm = String(d.getMinutes()).padStart(2, "0");
+                          return `${hh}:${mm}`;
+                        })()
+                      : "-"}
                   </div>
                   <div className="col-span-1">
                     {canCancel ? (

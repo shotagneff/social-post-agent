@@ -216,11 +216,27 @@ export default function PostDraftsPage() {
     return list.length > 0 ? list : ["X"];
   }, [selectedWorkspace]);
 
+  // クエリパラメータや workspace の設定から初期プラットフォームを決定する
   useEffect(() => {
+    // 1. URL クエリで指定されている platform を優先
+    if (platformFromQuery && allowedPlatforms.includes(platformFromQuery as Platform)) {
+      if (platform !== platformFromQuery) {
+        setPlatform(platformFromQuery as Platform);
+      }
+      return;
+    }
+
+    // 2. workspace 側で Threads が有効なら Threads を優先
+    if (allowedPlatforms.includes("THREADS") && platform !== "THREADS") {
+      setPlatform("THREADS");
+      return;
+    }
+
+    // 3. それ以外は X をデフォルトにする
     if (!allowedPlatforms.includes(platform)) {
       setPlatform(allowedPlatforms[0] ?? "X");
     }
-  }, [allowedPlatforms, platform]);
+  }, [allowedPlatforms, platform, platformFromQuery]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -562,13 +578,16 @@ export default function PostDraftsPage() {
         return;
       }
       const created = Number(json?.created ?? 0) || 0;
-      setImportNotice(`取り込みました: ${created} 件`);
+      if (importAutoAssign && created > 0) {
+        // 自動で仮予約まで行う場合は、仮予約作成完了後にまとめて通知を出す
+        await assignTempReservations({ limit: created });
+        setImportNotice(`取り込みました: ${created} 件（仮予約も作成しました）`);
+      } else {
+        // 仮予約を自動で行わない場合は、取り込み完了時点で通知を出す
+        setImportNotice(`取り込みました: ${created} 件`);
+      }
       setImportText("");
       await reload();
-
-      if (importAutoAssign && created > 0) {
-        await assignTempReservations({ limit: created });
-      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";
       setImportError(`エラー: ${msg}`);
@@ -610,7 +629,8 @@ export default function PostDraftsPage() {
         return;
       }
 
-      setAssignNotice(`仮予約を作成しました: ${assigned} 件${diag ? ` ${diag}` : ""}`);
+      // 成功時はシンプルなメッセージのみを表示する
+      setAssignNotice(`仮予約を作成しました: ${assigned} 件`);
       await reload();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "不明なエラー";

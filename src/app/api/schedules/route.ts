@@ -3,8 +3,11 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const url = new URL(req.url);
+    const workspaceId = String(url.searchParams.get("workspaceId") ?? "").trim();
+
     const now = new Date();
     const schedules = await prisma.schedule.findMany({
       where: {
@@ -12,6 +15,14 @@ export async function GET() {
         OR: [{ isConfirmed: true }, { draftId: { not: null } }],
         // Keep due items (past scheduledAt) visible; hide only history.
         scheduledAt: { gte: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7) },
+        ...(workspaceId
+          ? {
+              OR: [
+                { draft: { workspaceId } },
+                { postDraft: { workspaceId } },
+              ],
+            }
+          : {}),
       },
       orderBy: { scheduledAt: "asc" },
       take: 200,

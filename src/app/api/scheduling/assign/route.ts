@@ -108,7 +108,8 @@ export async function POST(req: Request) {
         status: "DRAFT_GENERATED",
         ...(platform ? { platform } : {}),
       },
-      orderBy: { createdAt: "asc" },
+      // 新しく作られた下書きから優先的に仮予約を割り当てる
+      orderBy: { createdAt: "desc" },
       take: slots.length,
       select: { id: true, platform: true },
     });
