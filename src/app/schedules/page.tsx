@@ -36,6 +36,11 @@ type Schedule = {
   } | null;
 };
 
+type WorkspaceItem = {
+  id: string;
+  name: string;
+};
+
 function isThreadsTokenExpiredErrorText(errorText: string) {
   const m = String(errorText ?? "").toLowerCase();
   return (
@@ -52,6 +57,10 @@ export default function SchedulesPage() {
   const [error, setError] = useState<string>("");
 
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string>("");
+
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(false);
+  const [workspacesError, setWorkspacesError] = useState<string>("");
 
   const [lastLoadedAtIso, setLastLoadedAtIso] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -89,6 +98,54 @@ export default function SchedulesPage() {
       setLoading(false);
       return;
     }
+
+  // ワークスペース一覧を取得して、プルダウン用に保持
+  useEffect(() => {
+    let canceled = false;
+    setWorkspacesLoading(true);
+    setWorkspacesError("");
+    fetch("/api/workspaces", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (canceled) return;
+        if (!json?.ok) {
+          setWorkspacesError(`エラー: ${json?.error ?? "不明なエラー"}`);
+          setWorkspaces([]);
+          return;
+        }
+
+        const list = Array.isArray(json.workspaces)
+          ? (json.workspaces as WorkspaceItem[])
+          : [];
+        setWorkspaces(list);
+
+        // URL に workspaceId が無い場合は、先頭のワークスペースをデフォルトにする
+        const search = typeof window !== "undefined" ? window.location.search : "";
+        const params = new URLSearchParams(search);
+        const fromQuery = String(params.get("workspaceId") ?? "").trim();
+        if (!fromQuery && list[0]?.id && !currentWorkspaceId) {
+          const id = list[0].id;
+          setCurrentWorkspaceId(id);
+          const url = new URL(window.location.href);
+          url.searchParams.set("workspaceId", id);
+          window.location.href = url.toString();
+        }
+      })
+      .catch((e) => {
+        if (canceled) return;
+        const msg = e instanceof Error ? e.message : "不明なエラー";
+        setWorkspacesError(`エラー: ${msg}`);
+        setWorkspaces([]);
+      })
+      .finally(() => {
+        if (canceled) return;
+        setWorkspacesLoading(false);
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [currentWorkspaceId]);
 
     setSchedules((json.schedules ?? []) as Schedule[]);
     setLastLoadedAtIso(new Date().toISOString());
@@ -302,12 +359,41 @@ export default function SchedulesPage() {
           <h1 className="text-2xl font-semibold">予約</h1>
           <div className="mt-1 text-sm text-zinc-600">Threads / X の予約状況を確認し、必要に応じて手動実行やキャンセルを行います。</div>
           <div className="mt-1 text-xs text-zinc-500">
-            {currentWorkspaceId
-              ? <>対象 workspaceId: <span className="font-mono">{currentWorkspaceId}</span></>
-              : "workspaceId が指定されていないため、全ワークスペースの予約が混在して表示されます（開発/デバッグ用）。"}
+            {currentWorkspaceId ? (
+              <>
+                表示中の投稿設計: {workspaces.find((w) => w.id === currentWorkspaceId)?.name ?? "(不明)"}
+                <span className="ml-2 font-mono text-[11px] text-zinc-500">{currentWorkspaceId}</span>
+              </>
+            ) : (
+              "表示中の投稿設計が選択されていません。下のプルダウンから選択してください。"
+            )}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1 text-xs text-zinc-600">
+        <div className="flex flex-col items-end gap-2 text-xs text-zinc-600">
+          <div className="flex items-center gap-2">
+            <span>投稿設計を選択:</span>
+            <select
+              className="rounded border border-zinc-200 bg-white px-2 py-1 text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+              value={currentWorkspaceId}
+              onChange={(e) => {
+                const id = e.target.value.trim();
+                setCurrentWorkspaceId(id);
+                const url = new URL(window.location.href);
+                if (id) url.searchParams.set("workspaceId", id);
+                else url.searchParams.delete("workspaceId");
+                window.location.href = url.toString();
+              }}
+            >
+              <option value="">選択してください</option>
+              {workspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} ({w.id.slice(0, 8)}...)
+                </option>
+              ))}
+            </select>
+          </div>
+          {workspacesLoading ? <div>投稿設計を読み込み中...</div> : null}
+          {workspacesError ? <div className="text-red-700">{workspacesError}</div> : null}
           <div>{cronModeText}</div>
           <label className="flex items-center gap-2">
             <input
